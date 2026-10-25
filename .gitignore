@@ -13,6 +13,8 @@
 scratch/
 tmp/
 temp/
+temp_portable/
+dist/
 
 # OS and Editor artifacts
 .DS_Store
