@@ -1,0 +1,22 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.bin
+*.iso
+*.zip
+*.tar.gz
+
+# Test & scratch directories
+scratch/
+tmp/
+temp/
+
+# OS and Editor artifacts
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
