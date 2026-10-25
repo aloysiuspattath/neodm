@@ -65,7 +65,7 @@ func main() {
 		if store.Settings.SoundAlertOnComplete {
 			fmt.Print("\a") // Standard alert chime
 		}
-		platform.ShowNotification("NeoDM - Download Completed", fmt.Sprintf("%s finished downloading.", t.Filename))
+		platform.ShowNotification("Nova Download Manager PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
 	})
 
 	// 3. Prepare frontend assets
@@ -121,7 +121,7 @@ func openWebView(url string, startMinimized bool) {
 		Debug:     false,
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
-			Title:  "Neo Download Manager PRO",
+			Title:  "Nova Download Manager PRO",
 			Width:  1100,
 			Height: 720,
 			IconId: 0,

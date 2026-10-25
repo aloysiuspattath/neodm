@@ -341,14 +341,13 @@ func (e *Engine) checkQueue() {
 
 	// 1. If QueueManager has registered queues, honor queue ordering and concurrency limits
 	if len(queuesCopy) > 0 {
-		startedAny := false
 		for _, q := range queuesCopy {
 			if !q.Running {
 				continue
 			}
 			simLimit := q.SimultaneousDownloads
 			if simLimit <= 0 {
-				simLimit = 1
+				simLimit = 4
 			}
 
 			for _, taskID := range q.Order {
@@ -362,24 +361,22 @@ func (e *Engine) checkQueue() {
 				if exists && t.Status == "Queued" {
 					activeCount++
 					activePerQueue[q.ID]++
-					startedAny = true
 					go t.Start()
 				}
 			}
 		}
-		if startedAny {
-			return
-		}
 	}
 
 	// 2. Fallback for tasks not in queues or standalone
-	for _, t := range e.tasks {
-		if activeCount >= limit {
-			break
-		}
-		if t.Status == "Queued" {
-			activeCount++
-			go t.Start()
+	if activeCount < limit {
+		for _, t := range e.tasks {
+			if activeCount >= limit {
+				break
+			}
+			if t.Status == "Queued" {
+				activeCount++
+				go t.Start()
+			}
 		}
 	}
 }

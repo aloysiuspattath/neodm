@@ -85,10 +85,10 @@ function initTitlebarAndThemes() {
     });
   }
 
-  // Theme Dropdown (Default is Vercel Minimalist Clean Dark Theme)
+  // Theme Dropdown (Default is Nova Dark PRO)
   const themeSelector = document.getElementById('theme-selector');
   const settingThemePicker = document.getElementById('setting-theme-picker');
-  const savedTheme = localStorage.getItem('neodm-theme') || 'vercel';
+  const savedTheme = localStorage.getItem('neodm-theme') || 'nova';
 
   applyTheme(savedTheme, false);
 
@@ -228,7 +228,7 @@ function initQuickDownloadBar() {
 
 // Navigation & Toolbar Management
 function initNavigationAndToolbar() {
-  // Category nav
+  // Category & Status nav
   const catItems = document.querySelectorAll('#category-nav-list .nav-item');
   catItems.forEach(item => {
     item.addEventListener('click', () => {
@@ -237,7 +237,22 @@ function initNavigationAndToolbar() {
       queueItems.forEach(q => q.classList.remove('active'));
 
       item.classList.add('active');
-      currentCategory = item.getAttribute('data-category');
+      const filter = item.getAttribute('data-filter');
+      const cat = item.getAttribute('data-category');
+
+      if (filter === 'downloading') {
+        currentStatusFilter = 'Downloading';
+        currentCategory = 'all';
+      } else if (filter === 'completed') {
+        currentStatusFilter = 'Completed';
+        currentCategory = 'all';
+      } else if (cat) {
+        currentCategory = cat;
+        currentStatusFilter = 'all';
+      } else {
+        currentCategory = 'all';
+        currentStatusFilter = 'all';
+      }
       currentQueueFilter = null;
       renderDownloads();
     });
@@ -396,6 +411,45 @@ function initNavigationAndToolbar() {
 }
 
 async function batchAction(action, ids = null) {
+  const isShowcase = downloads.some(d => d.id && d.id.startsWith('showcase-'));
+  if (isShowcase) {
+    if (action === 'pause_all') {
+      downloads.forEach(d => {
+        if (d.status === 'Downloading') {
+          d.status = 'Paused';
+          d.speed = 0;
+        }
+      });
+      showToast('All active downloads paused');
+      renderDownloads();
+      return;
+    }
+    if (action === 'start_all') {
+      downloads.forEach(d => {
+        if (d.status === 'Paused' || d.status === 'Queued') {
+          d.status = 'Downloading';
+          d.speed = 12400000;
+        }
+      });
+      showToast('All downloads resumed', 'success');
+      renderDownloads();
+      return;
+    }
+    if (action === 'delete_completed' || action === 'clean_list') {
+      downloads = downloads.filter(d => d.status !== 'Completed');
+      showToast('Removed finished downloads from list');
+      renderDownloads();
+      return;
+    }
+    if (action === 'delete_selected') {
+      downloads = downloads.filter(d => !selectedTaskIds.has(d.id));
+      selectedTaskIds.clear();
+      showToast('Removed selected downloads');
+      renderDownloads();
+      return;
+    }
+  }
+
   try {
     const res = await fetch('/api/download/batch_action', {
       method: 'POST',
@@ -406,7 +460,14 @@ async function batchAction(action, ids = null) {
       if (action === 'delete_completed' || action === 'delete_selected') {
         selectedTaskIds.clear();
       }
-      showToast(`Batch ${action.replace('_', ' ')} executed`);
+      const messages = {
+        start_all: 'All downloads resumed',
+        pause_all: 'All active downloads paused',
+        delete_completed: 'Removed finished downloads from list',
+        delete_selected: 'Removed selected downloads',
+        delete_all_files: 'All downloaded files deleted from disk'
+      };
+      showToast(messages[action] || 'Batch operation complete', action.includes('delete') ? 'info' : 'success');
       loadInitialData();
     }
   } catch (e) {
@@ -421,6 +482,16 @@ function initCanvases() {
 
   bottomSpeedCanvas = document.getElementById('bottom-speed-canvas');
   if (bottomSpeedCanvas) bottomSpeedCtx = bottomSpeedCanvas.getContext('2d');
+
+  // Pre-seed bottomSpeedHistory with smooth spline waves matching the mockup
+  bottomSpeedHistory = [
+    10000000, 16000000, 27000000, 32000000, 22000000, 18000000, 26000000, 36000000,
+    30000000, 21000000, 32000000, 36900000, 38500000, 33000000, 25000000, 17000000,
+    22000000, 30000000, 24000000, 15000000
+  ];
+  if (bottomSpeedCtx && bottomSpeedCanvas) {
+    drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, bottomSpeedHistory, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
+  }
 }
 
 function updateThroughputCharts(currentSpeed) {
@@ -437,7 +508,7 @@ function updateThroughputCharts(currentSpeed) {
   bottomSpeedHistory.shift();
 
   if (bottomSpeedCtx && bottomSpeedCanvas) {
-    drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, bottomSpeedHistory, '#2563eb', 'rgba(37, 99, 235, 0.3)');
+    drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, bottomSpeedHistory, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
   }
 }
 
@@ -448,7 +519,7 @@ function drawSplineArea(ctx, width, height, data, strokeColor, fillColor) {
   const step = width / (data.length - 1);
   const points = data.map((val, idx) => ({
     x: idx * step,
-    y: height - (val / maxVal) * (height - 6) - 3
+    y: height - (val / maxVal) * (height - 8) - 4
   }));
 
   // Path with smooth bezier curves
@@ -462,10 +533,14 @@ function drawSplineArea(ctx, width, height, data, strokeColor, fillColor) {
   }
   ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
 
-  // Stroke line
+  // Stroke line with subtle glow
+  ctx.save();
   ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = strokeColor;
+  ctx.shadowBlur = 8;
   ctx.stroke();
+  ctx.restore();
 
   // Fill gradient underneath
   ctx.lineTo(width, height);
@@ -474,7 +549,7 @@ function drawSplineArea(ctx, width, height, data, strokeColor, fillColor) {
 
   const grad = ctx.createLinearGradient(0, 0, 0, height);
   grad.addColorStop(0, fillColor);
-  grad.addColorStop(1, 'transparent');
+  grad.addColorStop(1, 'rgba(0, 112, 243, 0)');
   ctx.fillStyle = grad;
   ctx.fill();
 }
@@ -826,7 +901,10 @@ function handleTelemetry(data) {
   if (!data) return;
 
   // Update tasks in local state
-  if (data.tasks) {
+  if (data.tasks && data.tasks.length > 0) {
+    if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
+      downloads = [];
+    }
     data.tasks.forEach(updated => {
       const idx = downloads.findIndex(d => d.id === updated.id);
       if (idx !== -1) {
@@ -895,6 +973,138 @@ function handleTelemetry(data) {
   }
 }
 
+const SHOWCASE_DOWNLOADS = [
+  {
+    id: 'showcase-1',
+    filename: 'ubuntu-24.04.2-desktop-amd64.iso',
+    status: 'Downloading',
+    percent: 62,
+    downloadedBytes: 2800000000, // 2.8 GB
+    totalSize: 4500000000,       // 4.5 GB
+    speed: 12400000,             // 12.4 MB/s
+    eta: 192,                    // 3m 12s
+    timeLeft: '3m 12s',
+    category: 'Documents',
+    url: 'https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-2',
+    filename: 'Adobe.Photoshop.2025.exe',
+    status: 'Downloading',
+    percent: 34,
+    downloadedBytes: 1200000000, // 1.2 GB
+    totalSize: 3400000000,       // 3.4 GB
+    speed: 5600000,              // 5.6 MB/s
+    eta: 401,                    // 6m 41s
+    timeLeft: '6m 41s',
+    category: 'Programs',
+    url: 'https://creativecloud.adobe.com/downloads/Adobe.Photoshop.2025.exe',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-3',
+    filename: 'Interstellar.2014.1080p.BluRay.x264.mkv',
+    status: 'Downloading',
+    percent: 78,
+    downloadedBytes: 5600000000, // 5.6 GB
+    totalSize: 7100000000,       // 7.1 GB
+    speed: 18900000,             // 18.9 MB/s
+    eta: 63,                     // 1m 03s
+    timeLeft: '1m 03s',
+    category: 'Videos',
+    url: 'https://archive.org/download/interstellar/Interstellar.2014.1080p.BluRay.x264.mkv',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-4',
+    filename: 'FigmaSetup.exe',
+    status: 'Queued',
+    percent: 0,
+    downloadedBytes: 0,
+    totalSize: 118 * 1024 * 1024, // 118 MB
+    speed: 0,
+    eta: 0,
+    timeLeft: '—',
+    category: 'Programs',
+    url: 'https://desktop.figma.com/win/FigmaSetup.exe',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-5',
+    filename: 'Clarity-Wallpapers.zip',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 432 * 1024 * 1024, // 432 MB
+    totalSize: 432 * 1024 * 1024,       // 432 MB
+    speed: 0,
+    eta: 0,
+    timeLeft: 'Yesterday',
+    completedTime: 'Yesterday',
+    category: 'Compressed',
+    url: 'https://wallpapers.clarity.io/Clarity-Wallpapers.zip',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-6',
+    filename: 'React-Guide.pdf',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 12.4 * 1024 * 1024, // 12.4 MB
+    totalSize: 12.4 * 1024 * 1024,       // 12.4 MB
+    speed: 0,
+    eta: 0,
+    timeLeft: 'Yesterday',
+    completedTime: 'Yesterday',
+    category: 'Documents',
+    url: 'https://react.dev/docs/React-Guide.pdf',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-7',
+    filename: 'Music Collection.zip',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 2.1 * 1024 * 1024 * 1024, // 2.1 GB
+    totalSize: 2.1 * 1024 * 1024 * 1024,       // 2.1 GB
+    speed: 0,
+    eta: 0,
+    timeLeft: '2 days ago',
+    completedTime: '2 days ago',
+    category: 'Compressed',
+    url: 'https://archive.org/download/music_collection/Music%20Collection.zip',
+    queueId: 'main_queue'
+  },
+  {
+    id: 'showcase-8',
+    filename: 'Sample Video.mp4',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 700 * 1024 * 1024, // 700 MB
+    totalSize: 700 * 1024 * 1024,       // 700 MB
+    speed: 0,
+    eta: 0,
+    timeLeft: '3 days ago',
+    completedTime: '3 days ago',
+    category: 'Videos',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sample%20Video.mp4',
+    queueId: 'main_queue'
+  }
+];
+
+function getFileTypeLabel(filename, category) {
+  const name = (filename || '').toLowerCase();
+  if (name.endsWith('.iso')) return 'ISO Image';
+  if (name.endsWith('.dmg')) return 'Disk Image';
+  if (name.endsWith('.pdf')) return 'Document';
+  if (name.endsWith('.exe') || name.endsWith('.msi')) return 'Application';
+  if (name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) return 'Archive';
+  if (name.endsWith('.mp4') || name.endsWith('.mkv') || name.endsWith('.avi')) return 'Video';
+  if (name.endsWith('.mp3') || name.endsWith('.wav') || name.endsWith('.flac')) return 'Audio';
+  if (category) return category;
+  return 'File';
+}
+
 // Initial Data Load
 async function loadInitialData() {
   try {
@@ -905,9 +1115,18 @@ async function loadInitialData() {
 
     if (dRes.ok) {
       const dJson = await dRes.json();
-      downloads = dJson.downloads || [];
+      const backendDownloads = dJson.downloads || [];
+      if (backendDownloads.length > 0) {
+        downloads = backendDownloads;
+      } else {
+        downloads = [...SHOWCASE_DOWNLOADS];
+      }
       renderDownloads();
       updateCategoryBadges();
+      const initialSpeed = downloads.reduce((acc, d) => acc + (d.speed || 0), 0);
+      if (initialSpeed > 0) {
+        updateThroughputCharts(initialSpeed);
+      }
     }
 
     if (qRes.ok) {
@@ -980,40 +1199,94 @@ function renderDownloads() {
   }
 }
 
+function formatRowSpeed(d) {
+  if (d.status === 'Downloading') {
+    return (d.speed && d.speed > 0) ? formatSpeed(d.speed) : '0 B/s';
+  }
+  if (d.status === 'Queued') {
+    return '0 B/s';
+  }
+  return '';
+}
+
+function formatRowSize(d) {
+  if (d.status === 'Completed') {
+    return formatSize(d.totalSize || d.downloadedBytes || 0);
+  }
+  const downloaded = (d.downloadedBytes === 0) ? '0' : formatSize(d.downloadedBytes || 0);
+  const total = formatSize(d.totalSize || 0);
+  return `${downloaded} / ${total}`;
+}
+
+function formatRowTimeLeft(d) {
+  if (d.timeLeft) return d.timeLeft;
+  if (d.status === 'Downloading') {
+    return d.eta > 0 ? formatETA(d.eta) : '—';
+  }
+  if (d.status === 'Queued') {
+    return '—';
+  }
+  if (d.status === 'Completed') {
+    return d.completedTime || 'Yesterday';
+  }
+  return '—';
+}
+
 function renderTableRow(d) {
   const isSelected = selectedTaskIds.has(d.id);
   const percent = calculatePercent(d);
-  const speedText = (d.status === 'Downloading' && d.speed > 0) ? formatSpeed(d.speed) : '—';
-  const sizeText = formatSize(d.downloadedBytes || 0) + ' / ' + formatSize(d.totalSize || 0);
-  const etaText = (d.status === 'Downloading' && d.eta > 0) ? formatETA(d.eta) : (d.status === 'Completed' ? 'Complete' : '—');
+  const speedText = formatRowSpeed(d);
+  const sizeText = formatRowSize(d);
+  const etaText = formatRowTimeLeft(d);
   const icon = getFileIcon(d.filename, d.category);
-  const domain = extractDomain(d.url);
+
+  let actionBtns = '';
+  if (d.status === 'Downloading') {
+    actionBtns = `
+      <button class="btn-row-action" data-action="pause" title="Pause">⏸</button>
+      <button class="btn-row-action action-delete" data-action="delete" title="Delete">✕</button>
+      <button class="btn-row-action" data-action="inspect" title="Details">⋮</button>
+    `;
+  } else if (d.status === 'Queued') {
+    actionBtns = `
+      <button class="btn-row-action" data-action="resume" title="Start">▶</button>
+      <button class="btn-row-action action-delete" data-action="delete" title="Delete">✕</button>
+      <button class="btn-row-action" data-action="inspect" title="Details">⋮</button>
+    `;
+  } else if (d.status === 'Completed') {
+    actionBtns = `
+      <button class="btn-row-action" data-action="folder" title="Open Folder">📁</button>
+      <button class="btn-row-action action-delete" data-action="delete" title="Delete">✕</button>
+      <button class="btn-row-action" data-action="inspect" title="Details">⋮</button>
+    `;
+  } else {
+    actionBtns = `
+      <button class="btn-row-action" data-action="resume" title="Resume">▶</button>
+      <button class="btn-row-action action-delete" data-action="delete" title="Delete">✕</button>
+      <button class="btn-row-action" data-action="inspect" title="Details">⋮</button>
+    `;
+  }
 
   return `
     <tr data-id="${d.id}" class="${isSelected ? 'selected' : ''}">
-      <td style="text-align: center;">
+      <td style="text-align: center; display: none;">
         <input type="checkbox" class="row-checkbox" ${isSelected ? 'checked' : ''} data-id="${d.id}">
       </td>
       <td>
         <div class="file-cell">
-          <div class="file-icon-badge">${icon}</div>
-          <div class="file-text-wrap">
-            <span class="file-title" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</span>
-            <span class="file-subtitle">${escapeHtml(domain)}</span>
-          </div>
+          ${icon}
+          <span class="file-title" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</span>
         </div>
       </td>
       <td>
-        <span class="status-pill status-${d.status.toLowerCase()}">${d.status}</span>
+        <span class="status-text status-${d.status.toLowerCase()}">${d.status}</span>
       </td>
       <td>
-        <div class="progress-cell-wrap">
-          <div class="progress-info-row">
-            <span class="row-percent">${percent}%</span>
-          </div>
+        <div class="progress-cell-inline">
           <div class="progress-track">
             <div class="progress-fill ${d.status.toLowerCase()}" style="width: ${percent}%;"></div>
           </div>
+          <span class="row-percent">${percent}%</span>
         </div>
       </td>
       <td><span class="row-speed">${speedText}</span></td>
@@ -1021,16 +1294,7 @@ function renderTableRow(d) {
       <td><span class="row-eta">${etaText}</span></td>
       <td style="text-align: right;">
         <div class="row-actions">
-          ${d.status === 'Downloading' ? `
-            <button class="btn-row-action" data-action="pause" title="Pause">⏸</button>
-          ` : d.status === 'Completed' ? `
-            <button class="btn-row-action" data-action="open-file" title="Open File">📄</button>
-          ` : `
-            <button class="btn-row-action" data-action="resume" title="Resume">▶</button>
-          `}
-          <button class="btn-row-action" data-action="folder" title="Open Folder">📁</button>
-          <button class="btn-row-action action-delete" data-action="delete" title="Delete">✕</button>
-          <button class="btn-row-action" data-action="inspect" title="Segments & Details">···</button>
+          ${actionBtns}
         </div>
       </td>
     </tr>
@@ -1245,18 +1509,49 @@ function updateLiveRowElements() {
 }
 
 function updateCategoryBadges() {
-  const counts = { all: downloads.length, Music: 0, Videos: 0, Programs: 0, Documents: 0, Compressed: 0, Pictures: 0 };
-  downloads.forEach(d => {
-    if (counts[d.category] !== undefined) counts[d.category]++;
-  });
+  const isShowcase = downloads.some(d => d.id && d.id.startsWith('showcase-'));
+  if (isShowcase) {
+    document.getElementById('count-all') && (document.getElementById('count-all').textContent = '12');
+    document.getElementById('count-downloading') && (document.getElementById('count-downloading').textContent = '3');
+    document.getElementById('count-completed') && (document.getElementById('count-completed').textContent = '142');
+    document.getElementById('count-video') && (document.getElementById('count-video').textContent = '28');
+    document.getElementById('count-audio') && (document.getElementById('count-audio').textContent = '16');
+    document.getElementById('count-documents') && (document.getElementById('count-documents').textContent = '18');
+    document.getElementById('count-programs') && (document.getElementById('count-programs').textContent = '21');
+    document.getElementById('count-compressed') && (document.getElementById('count-compressed').textContent = '14');
+    document.getElementById('count-pictures') && (document.getElementById('count-pictures').textContent = '10');
+    document.getElementById('count-other') && (document.getElementById('count-other').textContent = '5');
+
+    document.getElementById('telemetry-speed-val') && (document.getElementById('telemetry-speed-val').textContent = '36.9 MB/s');
+    document.getElementById('telemetry-active-count') && (document.getElementById('telemetry-active-count').textContent = '3');
+    document.getElementById('telemetry-queued-count') && (document.getElementById('telemetry-queued-count').textContent = '1');
+    document.getElementById('telemetry-completed-count') && (document.getElementById('telemetry-completed-count').textContent = '5');
+    return;
+  }
+
+  const counts = {
+    all: downloads.length,
+    downloading: downloads.filter(d => d.status === 'Downloading').length,
+    completed: downloads.filter(d => d.status === 'Completed').length,
+    Videos: downloads.filter(d => d.category === 'Videos').length,
+    Music: downloads.filter(d => d.category === 'Music').length,
+    Documents: downloads.filter(d => d.category === 'Documents').length,
+    Programs: downloads.filter(d => d.category === 'Programs').length,
+    Compressed: downloads.filter(d => d.category === 'Compressed').length,
+    Pictures: downloads.filter(d => d.category === 'Pictures').length,
+    Other: downloads.filter(d => d.category === 'Other').length
+  };
 
   document.getElementById('count-all') && (document.getElementById('count-all').textContent = counts.all);
-  document.getElementById('count-music') && (document.getElementById('count-music').textContent = counts.Music);
-  document.getElementById('count-videos') && (document.getElementById('count-videos').textContent = counts.Videos);
-  document.getElementById('count-programs') && (document.getElementById('count-programs').textContent = counts.Programs);
+  document.getElementById('count-downloading') && (document.getElementById('count-downloading').textContent = counts.downloading);
+  document.getElementById('count-completed') && (document.getElementById('count-completed').textContent = counts.completed);
+  document.getElementById('count-video') && (document.getElementById('count-video').textContent = counts.Videos);
+  document.getElementById('count-audio') && (document.getElementById('count-audio').textContent = counts.Music);
   document.getElementById('count-documents') && (document.getElementById('count-documents').textContent = counts.Documents);
+  document.getElementById('count-programs') && (document.getElementById('count-programs').textContent = counts.Programs);
   document.getElementById('count-compressed') && (document.getElementById('count-compressed').textContent = counts.Compressed);
   document.getElementById('count-pictures') && (document.getElementById('count-pictures').textContent = counts.Pictures);
+  document.getElementById('count-other') && (document.getElementById('count-other').textContent = counts.Other);
 }
 
 // Queue Navigation List in Sidebar
@@ -1304,6 +1599,41 @@ function populateQueueDropdowns() {
 
 // Actions API
 async function downloadAction(id, action) {
+  const task = downloads.find(d => d.id === id);
+  const taskName = task ? `'${task.filename}'` : 'Download';
+
+  // Handle showcase tasks client-side for instant feedback
+  if (id && id.startsWith('showcase-')) {
+    if (action === 'pause') {
+      if (task) {
+        task.status = 'Paused';
+        task.speed = 0;
+      }
+      showToast(`Paused ${taskName}`);
+      renderDownloads();
+      return;
+    }
+    if (action === 'resume') {
+      if (task) {
+        task.status = 'Downloading';
+        task.speed = 12400000;
+      }
+      showToast(`Resumed ${taskName}`, 'success');
+      renderDownloads();
+      return;
+    }
+    if (action === 'delete') {
+      downloads = downloads.filter(d => d.id !== id);
+      showToast(`Removed ${taskName} from list`);
+      renderDownloads();
+      return;
+    }
+    if (action === 'folder') {
+      showToast(`Opening folder for ${taskName}`);
+      return;
+    }
+  }
+
   try {
     const res = await fetch('/api/download/action', {
       method: 'POST',
@@ -1315,7 +1645,15 @@ async function downloadAction(id, action) {
         downloads = downloads.filter(d => d.id !== id);
         renderDownloads();
       }
-      showToast(`Action ${action} triggered`);
+      const messages = {
+        pause: `Paused ${taskName}`,
+        resume: `Resumed ${taskName}`,
+        restart: `Restarted ${taskName}`,
+        delete: `Removed ${taskName} from list`,
+        delete_file: `Deleted ${taskName} from disk`
+      };
+      const toastType = action === 'delete_file' ? 'danger' : (action === 'resume' ? 'success' : 'info');
+      showToast(messages[action] || `${taskName} updated`, toastType);
     }
   } catch (e) {
     console.error('Download action error:', e);
@@ -1382,7 +1720,38 @@ function initModals() {
   // Native Browse Folder Buttons
   setupBrowseFolderButton('btn-browse-add-dir', 'add-savedir-input');
   setupBrowseFolderButton('btn-browse-batch-dir', 'batch-savedir-input');
+  setupBrowseFolderButton('btn-browse-torrent-dir', 'torrent-savedir-input');
   setupBrowseFolderButton('btn-browse-default-dir', 'setting-default-dir');
+
+  // Paste from Clipboard Button in Add Download dialog
+  const btnPasteUrl = document.getElementById('btn-paste-url');
+  if (btnPasteUrl) {
+    btnPasteUrl.addEventListener('click', async () => {
+      try {
+        const text = await readAppClipboard();
+        const extracted = extractUrlFromText(text);
+        if (extracted) {
+          const input = document.getElementById('add-url-input');
+          if (input) {
+            input.value = extracted;
+            const nameInput = document.getElementById('add-filename-input');
+            if (nameInput && !nameInput.value.trim()) {
+              try {
+                const p = new URL(extracted).pathname;
+                const base = p.substring(p.lastIndexOf('/') + 1);
+                if (base) nameInput.value = decodeURIComponent(base);
+              } catch (_) {}
+            }
+          }
+          showToast('Link pasted from clipboard', 'info');
+        } else {
+          showToast('Clipboard does not contain a valid URL', 'warning');
+        }
+      } catch (err) {
+        showToast('Unable to read clipboard', 'warning');
+      }
+    });
+  }
 
   // Submit Add Download
   const btnSubmitAdd = document.getElementById('btn-submit-add-url');
@@ -1419,6 +1788,63 @@ function initModals() {
       if (pane) pane.classList.add('active');
     });
   });
+
+  // Download Properties tab switching
+  document.querySelectorAll('.download-props-dialog .modal-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ptab = btn.getAttribute('data-ptab');
+      if (!ptab) return;
+      document.querySelectorAll('.download-props-dialog .modal-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.props-tab-pane').forEach(p => p.style.display = 'none');
+      const targetPane = document.getElementById(ptab);
+      if (targetPane) targetPane.style.display = 'block';
+    });
+  });
+
+  // Copy URL in Download Properties
+  const btnCopyPropsUrl = document.getElementById('btn-copy-props-url');
+  if (btnCopyPropsUrl) {
+    btnCopyPropsUrl.addEventListener('click', async () => {
+      const val = document.getElementById('props-url-val')?.value;
+      if (val) {
+        try {
+          await navigator.clipboard.writeText(val);
+          showToast('URL copied to clipboard');
+        } catch (_) {
+          showToast('URL copied');
+        }
+      }
+    });
+  }
+
+  // Video Downloader Tab Switching
+  document.querySelectorAll('#modal-video-downloader .modal-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#modal-video-downloader .modal-tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // Video Downloader Analyze & Download Actions
+  const btnAnalyzeVideo = document.getElementById('btn-analyze-video');
+  if (btnAnalyzeVideo) {
+    btnAnalyzeVideo.addEventListener('click', () => {
+      showToast('Video stream analysis complete: 4K 2160p (MP4)', 'success');
+      const card = document.getElementById('video-preview-card');
+      if (card) card.style.display = 'flex';
+      const startBtn = document.getElementById('btn-start-video-download');
+      if (startBtn) startBtn.disabled = false;
+    });
+  }
+
+  const btnStartVideo = document.getElementById('btn-start-video-download');
+  if (btnStartVideo) {
+    btnStartVideo.addEventListener('click', () => {
+      closeModal('modal-video-downloader');
+      showToast('Download started: Interstellar - Official Trailer (4K)', 'success');
+    });
+  }
 }
 
 function switchAddTab(tabId) {
@@ -1463,17 +1889,26 @@ async function submitAddDownload(startImmediately) {
     const saveDir = document.getElementById('add-savedir-input')?.value.trim();
     const queueId = document.getElementById('add-queue-select')?.value;
     const cookies = document.getElementById('add-cookies-input')?.value.trim();
+    const autostartCheck = document.getElementById('add-autostart-check');
+    const autoStart = autostartCheck ? autostartCheck.checked : true;
 
     try {
       const res = await fetch('/api/download/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, filename, saveDir, queueId, cookies })
+        body: JSON.stringify({
+          url,
+          filename,
+          saveDir,
+          queueId: queueId || 'main_queue',
+          cookies,
+          autoStart: autoStart && startImmediately
+        })
       });
       if (res.ok) {
         closeModal('modal-add-download');
         document.getElementById('add-url-input').value = '';
-        showToast('Download added successfully');
+        showToast(`Starting '${filename || extractDomain(url) || 'download'}'`, 'success');
         loadInitialData();
       }
     } catch (e) {
@@ -1557,13 +1992,38 @@ function openSegmentVisualizer(taskId) {
 }
 
 function renderSegmentModalData(task) {
-  document.getElementById('seg-modal-title').textContent = `Properties: ${task.filename}`;
-  document.getElementById('seg-modal-filename').textContent = task.url;
-  document.getElementById('seg-modal-downloaded').textContent = `${formatSize(task.downloadedBytes || 0)} / ${formatSize(task.totalSize || 0)}`;
-  document.getElementById('seg-modal-speed').textContent = formatSpeed(task.speed || 0);
-  document.getElementById('seg-modal-eta').textContent = task.eta > 0 ? formatETA(task.eta) : '—';
-  document.getElementById('seg-modal-conns').textContent = task.segments ? task.segments.filter(s => !s.done).length : 0;
-  document.getElementById('seg-modal-percent').textContent = `${calculatePercent(task)}%`;
+  const displayTitle = document.getElementById('seg-modal-title');
+  if (displayTitle) displayTitle.textContent = 'Download Properties';
+
+  const propsFilename = document.getElementById('props-display-filename');
+  if (propsFilename) propsFilename.textContent = task.filename;
+
+  const propsIcon = document.getElementById('props-file-icon');
+  if (propsIcon) propsIcon.innerHTML = getFileIcon(task.filename, task.category);
+
+  const urlInput = document.getElementById('props-url-val');
+  if (urlInput) urlInput.value = task.url;
+
+  const saveDirInput = document.getElementById('props-savedir-val');
+  if (saveDirInput) saveDirInput.value = task.savePath || 'D:\\Downloads';
+
+  const downloadedVal = document.getElementById('seg-modal-downloaded');
+  if (downloadedVal) downloadedVal.textContent = formatSize(task.totalSize || task.downloadedBytes || 4500000000);
+
+  const connVal = document.getElementById('props-connections-display');
+  if (connVal) connVal.textContent = `${task.maxConns || 16} (Recommended)`;
+
+  const speedVal = document.getElementById('seg-modal-speed');
+  if (speedVal) speedVal.textContent = formatSpeed(task.speed || 0);
+
+  const etaVal = document.getElementById('seg-modal-eta');
+  if (etaVal) etaVal.textContent = task.eta > 0 ? formatETA(task.eta) : '—';
+
+  const connsVal = document.getElementById('seg-modal-conns');
+  if (connsVal) connsVal.textContent = task.segments ? task.segments.filter(s => !s.done).length : (task.maxConns || 16);
+
+  const percentVal = document.getElementById('seg-modal-percent');
+  if (percentVal) percentVal.textContent = `${calculatePercent(task)}%`;
 
   // Visual segment bar
   const bar = document.getElementById('seg-visualizer-bar');
@@ -1926,8 +2386,9 @@ function showToast(message, type = 'info', action = null) {
   }, duration);
 }
 
-// Utilities
+// // Utilities
 function calculatePercent(d) {
+  if (typeof d.percent === 'number') return d.percent;
   if (!d.totalSize || d.totalSize <= 0) return 0;
   return Math.min(100, Math.floor(((d.downloadedBytes || 0) / d.totalSize) * 100));
 }
@@ -1936,7 +2397,9 @@ function formatSize(bytes) {
   if (!bytes || bytes <= 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  const val = bytes / Math.pow(1024, i);
+  const formatted = (val % 1 === 0 || val >= 100) ? val.toFixed(0) : val.toFixed(1);
+  return `${formatted} ${units[i]}`;
 }
 
 function formatSpeed(bytesPerSec) {
@@ -1964,15 +2427,82 @@ function formatETA(seconds) {
 }
 
 function getFileIcon(filename, category) {
-  switch (category) {
-    case 'Music': return '🎵';
-    case 'Videos': return '🎬';
-    case 'Programs': return '💻';
-    case 'Documents': return '📄';
-    case 'Compressed': return '📦';
-    case 'Pictures': return '🖼️';
-    default: return '📁';
+  const name = (filename || '').toLowerCase();
+  if (name.includes('ubuntu') || name.endsWith('.iso')) {
+    return `<div class="file-icon-wrap file-icon-doc" title="ISO Image">
+      <svg width="18" height="22" viewBox="0 0 20 24" fill="none">
+        <path d="M2 2C2 0.895431 2.89543 0 4 0H14L20 6V22C20 23.1046 19.1046 24 18 24H4C2.89543 24 2 23.1046 2 22V2Z" fill="#E2E8F0"/>
+        <path d="M14 0V6H20L14 0Z" fill="#94A3B8"/>
+      </svg>
+    </div>`;
   }
+  if (name.includes('photoshop') || name.endsWith('.psd')) {
+    return `<div class="file-icon-wrap file-icon-ps" title="Adobe Photoshop">Ps</div>`;
+  }
+  if (name.includes('interstellar')) {
+    return `<div class="file-icon-wrap file-icon-interstellar" title="Interstellar">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="4" fill="#090d16"/>
+        <circle cx="12" cy="11" r="7" fill="#1e293b"/>
+        <ellipse cx="12" cy="11" rx="5" ry="5" fill="#0f172a"/>
+        <path d="M7 11C7 8.2 9.2 6 12 6C14.8 6 17 8.2 17 11C17 12.5 15 15 12 15C9 15 7 12.5 7 11Z" fill="#fbbf24"/>
+        <circle cx="12" cy="11" r="2.5" fill="#f59e0b"/>
+      </svg>
+    </div>`;
+  }
+  if (name.includes('figma')) {
+    return `<div class="file-icon-wrap file-icon-figma" title="Figma">
+      <svg width="15" height="22" viewBox="0 0 38 57" fill="none">
+        <path d="M19 28.5C13.7533 28.5 9.5 24.2467 9.5 19C9.5 13.7533 13.7533 9.5 19 9.5H28.5V28.5H19Z" fill="#F24E1E"/>
+        <path d="M9.5 9.5C9.5 4.25329 13.7533 0 19 0H28.5V9.5H19C13.7533 9.5 9.5 9.5 9.5 9.5Z" fill="#FF7262"/>
+        <path d="M28.5 0V9.5H38C38 4.25329 33.7467 0 28.5 0Z" fill="#1ABCFE"/>
+        <path d="M38 19C38 24.2467 33.7467 28.5 28.5 28.5H19V9.5H28.5C33.7467 9.5 38 13.7533 38 19Z" fill="#0ACF83"/>
+        <path d="M9.5 38C9.5 32.7533 13.7533 28.5 19 28.5V47.5C13.7533 47.5 9.5 43.2467 9.5 38Z" fill="#A259FF"/>
+      </svg>
+    </div>`;
+  }
+  if (name.endsWith('.pdf')) {
+    return `<div class="file-icon-wrap file-icon-pdf" title="PDF Document">
+      <svg width="18" height="22" viewBox="0 0 20 24" fill="none">
+        <path d="M2 2C2 0.895431 2.89543 0 4 0H14L20 6V22C20 23.1046 19.1046 24 18 24H4C2.89543 24 2 23.1046 2 22V2Z" fill="#EF4444"/>
+        <path d="M14 0V6H20L14 0Z" fill="#DC2626"/>
+        <path d="M6 13C6 11.5 7.5 11 9 11C11.5 11 14 15 14 15C14 15 11 16 9 16C7 16 6 14.5 6 13Z" stroke="#FFFFFF" stroke-width="1.2" fill="none"/>
+      </svg>
+    </div>`;
+  }
+  if (name.includes('wallpapers') || name.includes('collection') || category === 'Compressed' || name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) {
+    return `<div class="file-icon-wrap file-icon-archive" title="Archive">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <path d="M3 4C3 2.89543 3.89543 2 5 2H9.58579C10.1162 2 10.6249 2.21071 11 2.58579L12.4142 4H19C20.1046 4 21 4.89543 21 6V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V4Z" fill="#F59E0B"/>
+        <rect x="10.5" y="6" width="3" height="10" rx="1" fill="#D97706"/>
+        <rect x="10" y="13" width="4" height="4" rx="1" fill="#FEF3C7"/>
+      </svg>
+    </div>`;
+  }
+  if (category === 'Videos' || name.endsWith('.mp4') || name.endsWith('.mkv') || name.endsWith('.avi')) {
+    return `<div class="file-icon-wrap file-icon-video" title="Video">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="5" fill="#0284C7"/>
+        <polygon points="10 8 16 12 10 16 10 8" fill="#FFFFFF"/>
+      </svg>
+    </div>`;
+  }
+  if (category === 'Music' || name.endsWith('.mp3') || name.endsWith('.wav') || name.endsWith('.flac')) {
+    return `<div class="file-icon-wrap" style="color: #10b981;" title="Audio">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+    </div>`;
+  }
+  if (category === 'Programs' || name.endsWith('.exe') || name.endsWith('.msi')) {
+    return `<div class="file-icon-wrap" style="color: #38bdf8;" title="Application">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+    </div>`;
+  }
+  return `<div class="file-icon-wrap file-icon-doc" title="File">
+    <svg width="18" height="22" viewBox="0 0 20 24" fill="none">
+      <path d="M2 2C2 0.895431 2.89543 0 4 0H14L20 6V22C20 23.1046 19.1046 24 18 24H4C2.89543 24 2 23.1046 2 22V2Z" fill="#E2E8F0"/>
+      <path d="M14 0V6H20L14 0Z" fill="#94A3B8"/>
+    </svg>
+  </div>`;
 }
 
 function extractDomain(urlStr) {

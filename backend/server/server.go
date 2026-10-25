@@ -131,12 +131,14 @@ func (s *Server) cors(h http.HandlerFunc) http.HandlerFunc {
 }
 
 type AddDownloadReq struct {
-	URL      string            `json:"url"`
-	Filename string            `json:"filename"`
-	SaveDir  string            `json:"saveDir"`
-	QueueID  string            `json:"queueId,omitempty"`
-	Headers  map[string]string `json:"headers"`
-	Cookies  string            `json:"cookies"`
+	URL       string            `json:"url"`
+	Filename  string            `json:"filename"`
+	SaveDir   string            `json:"saveDir"`
+	QueueID   string            `json:"queueId,omitempty"`
+	QueueName string            `json:"queueName,omitempty"`
+	Headers   map[string]string `json:"headers"`
+	Cookies   string            `json:"cookies"`
+	AutoStart *bool             `json:"autoStart,omitempty"`
 }
 
 func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
@@ -163,10 +165,30 @@ func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 		cleanHeaders["Cookie"] = cleanCookies
 	}
 
-	task, err := s.engine.AddTaskWithQueue(req.URL, req.Filename, req.SaveDir, cleanHeaders, req.QueueID)
+	targetQueue := req.QueueID
+	if targetQueue == "" && req.QueueName != "" {
+		targetQueue = req.QueueName
+	}
+	if targetQueue == "" {
+		targetQueue = "main_queue"
+	}
+
+	task, err := s.engine.AddTaskWithQueue(req.URL, req.Filename, req.SaveDir, cleanHeaders, targetQueue)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Ensure immediate data transfer when autoStart is requested (default true)
+	if req.AutoStart == nil || *req.AutoStart {
+		if s.engine.QueueMgr != nil {
+			if q := s.engine.QueueMgr.GetQueue(targetQueue); q != nil && !q.ScheduleEnabled {
+				_ = s.engine.QueueMgr.StartQueue(targetQueue)
+			}
+		}
+		if task.Status == "Queued" {
+			go task.Start()
+		}
 	}
 
 	s.hub.BroadcastEvent("task_added", task.ToRecord())

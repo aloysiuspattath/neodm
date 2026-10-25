@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="vercel">
+<html lang="en" data-theme="nova">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
-  <title>Neo Download Manager PRO (NeoDM)</title>
+  <title>Nova Download Manager PRO</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,14 +13,16 @@
     <div class="titlebar-left" id="titlebar-drag-area">
       <div class="titlebar-brand">
         <div class="titlebar-logo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
-            <rect x="3" y="17" width="18" height="4" rx="1"></rect>
           </svg>
         </div>
-        <span class="titlebar-title">Neo Download Manager</span>
+        <span class="titlebar-title">Nova Download Manager</span>
         <span class="titlebar-pro-badge">PRO</span>
+        <svg class="titlebar-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
       </div>
     </div>
 
@@ -31,7 +33,7 @@
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="text" id="global-search-input" placeholder="Search downloads (Ctrl+F)..." autocomplete="off">
+        <input type="text" id="global-search-input" placeholder="Search downloads, paste links or type URL..." autocomplete="off">
         <button class="search-filter-btn" id="btn-search-filter" title="Filter options">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
@@ -41,21 +43,12 @@
     </div>
 
     <div class="titlebar-right">
-      <!-- Toggle Overview Stats (replaces old "bento stats" name) -->
-      <button class="btn-titlebar-action" id="btn-toggle-stats" title="Show/Hide Real-Time Performance Stats">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-          <line x1="3" y1="9" x2="21" y2="9"></line>
-          <line x1="9" y1="21" x2="9" y2="9"></line>
-        </svg>
-        <span id="stats-btn-text">Show Stats</span>
-      </button>
-
-      <!-- Theme Selector Dropdown -->
-      <div class="theme-select-wrap">
-        <select id="theme-selector" class="theme-dropdown" title="Switch UI Theme">
-          <option value="vercel" selected>▲ Vercel Dark (Minimalist)</option>
-          <option value="nova">🌌 Nova Dark PRO</option>
+      <!-- Hidden legacy hooks for theme/stats to keep controllers working -->
+      <button class="btn-titlebar-action" id="btn-toggle-stats" style="display: none;"><span id="stats-btn-text"></span></button>
+      <div class="theme-select-wrap" style="display: none;">
+        <select id="theme-selector" class="theme-dropdown">
+          <option value="nova" selected>🌌 Nova Dark PRO</option>
+          <option value="vercel">▲ Vercel Dark</option>
           <option value="glass">🔮 Bento Glass</option>
           <option value="dracula">🧛 Dracula Pro</option>
           <option value="nord">❄️ Nordic Frost</option>
@@ -98,50 +91,124 @@
 
         <!-- Categories Section -->
         <div class="sidebar-section">
-          <div class="sidebar-title">Categories</div>
           <ul class="nav-list" id="category-nav-list">
-            <li class="nav-item active" data-category="all">
+            <li class="nav-item" data-category="all">
               <span class="nav-icon">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="4" y1="6" x2="20" y2="6"></line>
+                  <line x1="4" y1="12" x2="20" y2="12"></line>
+                  <line x1="4" y1="18" x2="20" y2="18"></line>
+                  <circle cx="8" cy="6" r="2" fill="currentColor"></circle>
+                  <circle cx="16" cy="12" r="2" fill="currentColor"></circle>
+                  <circle cx="10" cy="18" r="2" fill="currentColor"></circle>
+                </svg>
               </span>
               <span class="nav-label">All Downloads</span>
-              <span class="badge" id="count-all">0</span>
+              <span class="badge" id="count-all">12</span>
             </li>
-            <li class="nav-item" data-category="Music">
-              <span class="nav-icon">🎵</span>
-              <span class="nav-label">Music</span>
-              <span class="badge" id="count-music">0</span>
+            <li class="nav-item active" data-filter="downloading">
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                  <rect x="3" y="17" width="18" height="4" rx="1"></rect>
+                </svg>
+              </span>
+              <span class="nav-label">Downloading</span>
+              <span class="badge badge-active-pill" id="count-downloading">3</span>
+            </li>
+            <li class="nav-item" data-filter="completed">
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <polyline points="9 12 11.5 14.5 15.5 9.5"></polyline>
+                </svg>
+              </span>
+              <span class="nav-label">Completed</span>
+              <span class="badge" id="count-completed">142</span>
             </li>
             <li class="nav-item" data-category="Videos">
-              <span class="nav-icon">🎬</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                </svg>
+              </span>
               <span class="nav-label">Video</span>
-              <span class="badge" id="count-videos">0</span>
+              <span class="badge" id="count-video">28</span>
             </li>
-            <li class="nav-item" data-category="Programs">
-              <span class="nav-icon">💻</span>
-              <span class="nav-label">Programs</span>
-              <span class="badge" id="count-programs">0</span>
+            <li class="nav-item" data-category="Music">
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 18V5l12-2v13"></path>
+                  <circle cx="6" cy="18" r="3"></circle>
+                  <circle cx="18" cy="16" r="3"></circle>
+                </svg>
+              </span>
+              <span class="nav-label">Audio</span>
+              <span class="badge" id="count-audio">16</span>
             </li>
             <li class="nav-item" data-category="Documents">
-              <span class="nav-icon">📄</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+              </span>
               <span class="nav-label">Documents</span>
-              <span class="badge" id="count-documents">0</span>
+              <span class="badge" id="count-documents">18</span>
+            </li>
+            <li class="nav-item" data-category="Programs">
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="3" width="7" height="7"></rect>
+                  <rect x="14" y="14" width="7" height="7"></rect>
+                  <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+              </span>
+              <span class="nav-label">Programs</span>
+              <span class="badge" id="count-programs">21</span>
             </li>
             <li class="nav-item" data-category="Compressed">
-              <span class="nav-icon">📦</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                  <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+              </span>
               <span class="nav-label">Compressed</span>
-              <span class="badge" id="count-compressed">0</span>
+              <span class="badge" id="count-compressed">14</span>
             </li>
             <li class="nav-item" data-category="Pictures">
-              <span class="nav-icon">🖼️</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </span>
               <span class="nav-label">Pictures</span>
-              <span class="badge" id="count-pictures">0</span>
+              <span class="badge" id="count-pictures">10</span>
+            </li>
+            <li class="nav-item" data-category="Other">
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                  <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                </svg>
+              </span>
+              <span class="nav-label">Other</span>
+              <span class="badge" id="count-other">5</span>
             </li>
           </ul>
         </div>
 
-        <!-- Download Queues Section -->
-        <div class="sidebar-section">
+        <!-- Download Queues Section (Hidden from main sidebar to match mockup, accessible via Scheduler) -->
+        <div class="sidebar-section" style="display: none;">
           <div class="sidebar-title-row">
             <span class="sidebar-title">Queues</span>
             <button class="btn-icon-xs" id="btn-add-queue-inline" title="Add Custom Queue">＋</button>
@@ -165,24 +232,41 @@
           <div class="sidebar-title">Tools</div>
           <ul class="nav-list">
             <li class="nav-item" id="tool-browser-integration">
-              <span class="nav-icon">🌐</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+              </span>
               <span class="nav-label">Browser Integration</span>
             </li>
             <li class="nav-item" id="tool-video-downloader">
-              <span class="nav-icon">🎥</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                </svg>
+              </span>
               <span class="nav-label">Video Downloader</span>
             </li>
             <li class="nav-item" id="tool-batch-downloader">
-              <span class="nav-icon">📑</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+              </span>
               <span class="nav-label">Batch Downloader</span>
             </li>
             <li class="nav-item" id="tool-scheduler">
-              <span class="nav-icon">⏰</span>
-              <span class="nav-label">Scheduler & Queues</span>
-            </li>
-            <li class="nav-item" id="tool-site-grabber">
-              <span class="nav-icon">🕷️</span>
-              <span class="nav-label">Site Grabber</span>
+              <span class="nav-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </span>
+              <span class="nav-label">Scheduler</span>
             </li>
           </ul>
         </div>
@@ -294,19 +378,20 @@
           </div>
         </div>
 
-        <!-- Action Toolbar (matches reference design) -->
+        <!-- Action Toolbar (matches reference design - grouped on right) -->
         <div class="main-action-toolbar">
-          <div class="toolbar-left-actions">
+          <div class="toolbar-spacer"></div>
+          <div class="toolbar-actions-cluster">
             <button class="btn btn-action" id="btn-start-all" title="Start / Resume All Downloads">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               <span>Start All</span>
             </button>
             <button class="btn btn-action" id="btn-pause-all" title="Pause All Active Downloads">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
               <span>Pause All</span>
             </button>
-            <button class="btn btn-action btn-action-danger" id="btn-delete-completed" title="Delete Selected or Clear Completed Downloads">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <button class="btn btn-action btn-action-delete" id="btn-delete-completed" title="Delete Selected or Clear Completed Downloads">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               <span id="btn-delete-label">Delete</span>
             </button>
             <div class="dropdown-wrap" id="toolbar-more-actions-wrap">
@@ -331,36 +416,24 @@
                 </div>
               </div>
             </div>
-          </div>
-
-          <div class="toolbar-right-controls">
-            <!-- Filter by Status Dropdown -->
-            <select id="status-filter" class="filter-dropdown">
-              <option value="all">All Statuses</option>
-              <option value="Downloading">Downloading</option>
-              <option value="Completed">Completed</option>
-              <option value="Paused">Paused</option>
-              <option value="Queued">Queued</option>
-              <option value="Error">Error</option>
-            </select>
 
             <!-- Table / Cards View Toggles -->
             <div class="view-mode-toggle">
-              <button class="view-btn active" id="view-mode-table" title="Table View">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              <button class="view-btn active" id="view-mode-table" title="List View">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
               </button>
-              <button class="view-btn" id="view-mode-grid" title="Grid / Cards View">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+              <button class="view-btn" id="view-mode-grid" title="Grid View">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- Quick Download Bar (Easy 1-click download for general users) -->
-        <div class="quick-download-strip">
+        <!-- Quick Download Bar (hidden to match reference mockup layout) -->
+        <div class="quick-download-strip" style="display: none;">
           <div class="quick-input-wrap">
             <span class="quick-icon">⚡</span>
-            <input type="text" id="quick-url-input" placeholder="Paste download URL here (or press Ctrl+V anywhere) and press Enter..." autocomplete="off">
+            <input type="text" id="quick-url-input" placeholder="Paste download URL here..." autocomplete="off">
           </div>
           <button class="btn btn-quick-download" id="btn-quick-start">Download Now</button>
         </div>
@@ -370,16 +443,16 @@
           <table class="downloads-table" id="main-downloads-table">
             <thead>
               <tr>
-                <th style="width: 40px; text-align: center;">
+                <th style="width: 28px; text-align: center; display: none;">
                   <input type="checkbox" id="check-all-downloads" title="Select All">
                 </th>
-                <th>File Name</th>
-                <th style="width: 110px;">Status</th>
-                <th style="width: 175px;">Progress</th>
-                <th style="width: 110px;">Transfer Speed</th>
-                <th style="width: 125px;">File Size</th>
-                <th style="width: 95px;">Time Left</th>
-                <th style="width: 155px; text-align: right;">Actions</th>
+                <th style="text-align: left;">Name</th>
+                <th style="width: 120px;">Status</th>
+                <th style="width: 180px;">Progress</th>
+                <th style="width: 110px;">Speed</th>
+                <th style="width: 120px;">Size</th>
+                <th style="width: 105px;">Time Left</th>
+                <th style="width: 110px; text-align: right;"></th>
               </tr>
             </thead>
             <tbody id="downloads-tbody">
@@ -406,32 +479,31 @@
           </div>
         </div>
 
-        <!-- Bottom Telemetry Bar (matches reference image: Total Speed, Spline Chart, Active, Queued, Completed) -->
-        <div class="bottom-telemetry-bar">
-          <div class="telemetry-speed-block">
-            <span class="telemetry-label">Total Speed:</span>
-            <div class="telemetry-speed-val-wrap">
-              <span class="telemetry-speed-arrow">▲</span>
-              <span class="telemetry-speed-val" id="telemetry-speed-val">0.0 MB/s</span>
+        <!-- Bottom Telemetry Dock (floating rounded card matching mockup) -->
+        <div class="bottom-telemetry-dock-wrap">
+          <div class="bottom-telemetry-card">
+            <div class="telemetry-speed-block">
+              <span class="telemetry-label">Total Speed</span>
+              <span class="telemetry-speed-val" id="telemetry-speed-val">36.9 MB/s</span>
             </div>
-          </div>
 
-          <div class="telemetry-chart-block">
-            <canvas id="bottom-speed-canvas" width="380" height="34"></canvas>
-          </div>
+            <div class="telemetry-chart-block">
+              <canvas id="bottom-speed-canvas" width="400" height="42"></canvas>
+            </div>
 
-          <div class="telemetry-metrics-block">
-            <div class="telemetry-pill pill-active">
-              <span class="dot dot-active"></span>
-              <span>Active: <strong id="telemetry-active-count">0</strong></span>
-            </div>
-            <div class="telemetry-pill pill-queued">
-              <span class="dot dot-queued"></span>
-              <span>Queued: <strong id="telemetry-queued-count">0</strong></span>
-            </div>
-            <div class="telemetry-pill pill-completed">
-              <span class="dot dot-completed"></span>
-              <span>Completed: <strong id="telemetry-completed-count">0</strong></span>
+            <div class="telemetry-metrics-block">
+              <div class="telemetry-metric-col">
+                <span class="metric-label">Active</span>
+                <span class="metric-val" id="telemetry-active-count">3</span>
+              </div>
+              <div class="telemetry-metric-col">
+                <span class="metric-label">Queued</span>
+                <span class="metric-val" id="telemetry-queued-count">1</span>
+              </div>
+              <div class="telemetry-metric-col">
+                <span class="metric-label">Completed (Today)</span>
+                <span class="metric-val" id="telemetry-completed-count">5</span>
+              </div>
             </div>
           </div>
         </div>
@@ -522,161 +594,106 @@
   <!-- Toast Notification Container -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- Modal: Add Download (URL | Batch | Site Grabber) -->
+  <!-- Modal: Add Download (URL | Batch | Torrent) -->
   <div class="modal-overlay" id="modal-add-download">
-    <div class="modal-card modal-tabs-card">
+    <div class="modal-card modal-tabs-card add-download-dialog">
       <div class="modal-header">
-        <div class="modal-title-wrap">
-          <h2>Add New Download</h2>
-          <span class="modal-subtitle">High-speed dynamic multi-segment downloading</span>
+        <div class="modal-title-row">
+          <svg class="modal-header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+            <rect x="3" y="17" width="18" height="4" rx="1"></rect>
+          </svg>
+          <h2 class="modal-title">Add Download</h2>
         </div>
         <button class="modal-close" onclick="closeModal('modal-add-download')">✕</button>
       </div>
 
-      <!-- Add Download Tabs -->
+      <!-- Add Download Tabs: URL | Batch | Torrent -->
       <div class="modal-nav-tabs">
-        <button class="modal-tab-btn active" data-tab="tab-add-url">URL Download</button>
-        <button class="modal-tab-btn" data-tab="tab-add-batch">Batch Pattern</button>
-        <button class="modal-tab-btn" data-tab="tab-add-grabber">Site Grabber</button>
+        <button class="modal-tab-btn active" data-tab="tab-add-url">URL</button>
+        <button class="modal-tab-btn" data-tab="tab-add-batch">Batch</button>
+        <button class="modal-tab-btn" data-tab="tab-add-torrent">Torrent</button>
       </div>
 
       <div class="modal-body">
         <!-- Tab 1: Single URL -->
         <div class="modal-tab-pane active" id="tab-add-url">
           <div class="form-group">
-            <label>Download URL Address:</label>
-            <input type="text" id="add-url-input" placeholder="https://example.com/software-setup.exe" autofocus>
-          </div>
-          <div class="form-row">
-            <div class="form-group" style="flex: 2;">
-              <label>Save As Filename (Optional):</label>
-              <input type="text" id="add-filename-input" placeholder="Auto-detected from server">
-            </div>
-            <div class="form-group" style="flex: 1;">
-              <label>Assign to Queue:</label>
-              <select id="add-queue-select">
-                <option value="main_queue">Main Download Queue</option>
-                <option value="night_queue">Night Download Queue</option>
-              </select>
+            <div class="input-with-paste">
+              <input type="text" id="add-url-input" placeholder="https://example.com/file.zip" autofocus>
+              <button class="btn-paste-icon" id="btn-paste-url" type="button" title="Paste from Clipboard">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                </svg>
+              </button>
             </div>
           </div>
+
           <div class="form-group">
-            <label>Save Directory:</label>
+            <label class="form-label-subtle">Download to</label>
             <div class="input-with-button">
-              <input type="text" id="add-savedir-input" placeholder="Default category directory">
-              <button class="btn btn-secondary" id="btn-browse-add-dir" type="button">Browse...</button>
+              <input type="text" id="add-savedir-input" placeholder="D:\Downloads">
+              <button class="btn btn-change-folder" id="btn-browse-add-dir" type="button">Change</button>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group" style="flex: 1;">
-              <label>Max Connections (1-32):</label>
-              <select id="add-conns-select">
-                <option value="4">4 Connections</option>
-                <option value="8" selected>8 Connections (Recommended)</option>
-                <option value="16">16 Connections</option>
-                <option value="24">24 Connections</option>
-                <option value="32">32 Connections (Maximum Speed)</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex: 1;">
-              <label>Speed Limit:</label>
-              <select id="add-speed-select">
-                <option value="0" selected>Unlimited (Full Bandwidth)</option>
-                <option value="524288">500 KB/s</option>
-                <option value="1048576">1 MB/s</option>
-                <option value="2097152">2 MB/s</option>
-                <option value="5242880">5 MB/s</option>
-              </select>
-            </div>
-          </div>
+
           <div class="form-group">
-            <label>Custom Cookies / Headers (Optional):</label>
-            <input type="text" id="add-cookies-input" placeholder="Cookie: session=xyz or Authorization header">
+            <label class="form-label-subtle">File name</label>
+            <input type="text" id="add-filename-input" placeholder="file.zip">
           </div>
-          <div class="checkbox-row">
+
+          <div class="checkbox-row custom-checkbox-row">
             <input type="checkbox" id="add-autostart-check" checked>
-            <label for="add-autostart-check">Start download immediately (otherwise add to queue)</label>
+            <label for="add-autostart-check">Start download automatically</label>
+          </div>
+
+          <!-- Hidden options for controllers -->
+          <div style="display: none;">
+            <select id="add-queue-select"><option value="main_queue">Main</option></select>
+            <select id="add-conns-select"><option value="8">8</option></select>
+            <select id="add-speed-select"><option value="0">0</option></select>
+            <input type="text" id="add-cookies-input">
           </div>
         </div>
 
         <!-- Tab 2: Batch Pattern -->
         <div class="modal-tab-pane" id="tab-add-batch">
           <div class="form-group">
-            <label>URL Template with range pattern [start-end]:</label>
+            <label class="form-label-subtle">URL Template with range pattern [start-end]:</label>
             <input type="text" id="batch-template-input" placeholder="https://example.com/files/chapter_[01-20].pdf">
             <span class="form-hint">Example: https://site.com/file_[01-15].zip generates 15 downloads</span>
           </div>
           <div class="form-group">
-            <label>Save Directory (Optional):</label>
+            <label class="form-label-subtle">Download to</label>
             <div class="input-with-button">
-              <input type="text" id="batch-savedir-input" placeholder="Default category directory">
-              <button class="btn btn-secondary" id="btn-browse-batch-dir" type="button">Browse...</button>
+              <input type="text" id="batch-savedir-input" placeholder="D:\Downloads">
+              <button class="btn btn-change-folder" id="btn-browse-batch-dir" type="button">Change</button>
             </div>
           </div>
         </div>
 
-        <!-- Tab 3: Site Grabber -->
-        <div class="modal-tab-pane" id="tab-add-grabber">
-          <div class="form-row">
-            <div class="form-group" style="flex: 2;">
-              <label>Target Webpage URL:</label>
-              <input type="text" id="grabber-url" placeholder="https://example.com/gallery/">
-            </div>
-            <div class="form-group" style="flex: 1;">
-              <label>Crawl Depth:</label>
-              <select id="grabber-depth">
-                <option value="1">1 - Current Page</option>
-                <option value="2">2 - Sub-pages</option>
-              </select>
-            </div>
+        <!-- Tab 3: Torrent / Magnet -->
+        <div class="modal-tab-pane" id="tab-add-torrent">
+          <div class="form-group">
+            <label class="form-label-subtle">Torrent File or Magnet Link:</label>
+            <input type="text" id="torrent-input" placeholder="magnet:?xt=urn:btih:... or paste torrent link">
           </div>
-          <div class="form-row">
-            <div class="form-group" style="flex: 1;">
-              <label>File Type Preset:</label>
-              <select id="grabber-preset">
-                <option value="">All Files</option>
-                <option value="Videos">Videos (.mp4, .mkv, .webm)</option>
-                <option value="Images">Images (.jpg, .png, .webp)</option>
-                <option value="Documents">Documents (.pdf, .docx, .epub)</option>
-                <option value="Compressed">Archives (.zip, .rar, .7z, .iso)</option>
-              </select>
+          <div class="form-group">
+            <label class="form-label-subtle">Download to</label>
+            <div class="input-with-button">
+              <input type="text" id="torrent-savedir-input" placeholder="D:\Downloads">
+              <button class="btn btn-change-folder" id="btn-browse-torrent-dir" type="button">Change</button>
             </div>
-            <div class="form-group" style="flex: 1;">
-              <label>Regex Filter:</label>
-              <input type="text" id="grabber-regex" placeholder="e.g. .*\.pdf$ or ep_\d+">
-            </div>
-            <div class="form-group" style="align-self: flex-end;">
-              <button class="btn btn-primary" id="btn-start-crawl" type="button">🔍 Crawl</button>
-            </div>
-          </div>
-
-          <div class="grabber-results-header">
-            <span id="grabber-count-label">Found 0 links</span>
-            <div class="grabber-actions">
-              <button class="btn btn-sm" id="btn-grabber-select-all" type="button">Select All</button>
-              <button class="btn btn-sm" id="btn-grabber-deselect-all" type="button">Deselect All</button>
-            </div>
-          </div>
-          <div class="grabber-table-wrap">
-            <table class="downloads-table">
-              <thead>
-                <tr>
-                  <th style="width: 36px;"><input type="checkbox" id="grabber-check-master"></th>
-                  <th>File Name</th>
-                  <th style="width: 90px;">Type</th>
-                  <th>URL</th>
-                </tr>
-              </thead>
-              <tbody id="grabber-tbody"></tbody>
-            </table>
           </div>
         </div>
       </div>
 
-      <div class="modal-footer">
-        <button class="btn" onclick="closeModal('modal-add-download')">Cancel</button>
-        <button class="btn btn-secondary" id="btn-queue-download">Add to Queue</button>
-        <button class="btn btn-primary" id="btn-submit-add-url">Start Download</button>
+      <div class="modal-footer add-download-footer">
+        <button class="btn btn-modal-cancel" onclick="closeModal('modal-add-download')">Cancel</button>
+        <button class="btn btn-secondary" id="btn-queue-download" style="display: none;">Add to Queue</button>
+        <button class="btn btn-modal-download" id="btn-submit-add-url">Download</button>
       </div>
     </div>
   </div>
@@ -691,109 +708,219 @@
         </div>
         <button class="modal-close" onclick="closeModal('modal-video-downloader')">✕</button>
       </div>
+
+      <!-- Video Downloader Tabs -->
+      <div class="modal-nav-tabs">
+        <button class="modal-tab-btn active" data-vtab="vtab-single">Single Video</button>
+        <button class="modal-tab-btn" data-vtab="vtab-playlist">Playlist / Channel</button>
+      </div>
+
       <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group" style="flex: 1;">
-            <label>Video or Stream Link:</label>
-            <input type="text" id="video-url-input" placeholder="https://example.com/watch?v=... or direct .m3u8/.mp4">
+        <div class="input-with-button">
+          <input type="text" id="video-url-input" placeholder="https://www.youtube.com/watch?v=xxxxxxxxx" value="https://www.youtube.com/watch?v=xxxxxxxxx">
+          <button class="btn btn-modal-download" id="btn-analyze-video" type="button">Analyze</button>
+        </div>
+
+        <div class="video-preview-card" id="video-preview-card" style="display: flex;">
+          <div class="video-thumbnail-wrap">
+            <div class="video-thumb-img">
+              <svg width="100%" height="100%" viewBox="0 0 160 90" fill="none">
+                <rect width="160" height="90" rx="6" fill="#0f172a"/>
+                <ellipse cx="80" cy="45" rx="50" ry="30" fill="#1e293b"/>
+                <path d="M50 45C50 30 65 20 80 20C95 20 110 30 110 45C110 55 95 65 80 65C65 65 50 55 50 45Z" fill="#fbbf24" opacity="0.6"/>
+                <circle cx="80" cy="45" r="14" fill="#f59e0b"/>
+                <path d="M40 80L80 30L120 80" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span class="video-duration-badge" id="video-duration-display">2:32</span>
           </div>
-          <div class="form-group" style="align-self: flex-end;">
-            <button class="btn btn-primary" id="btn-analyze-video" type="button">Inspect Video</button>
+          <div class="video-info-wrap">
+            <h4 class="video-preview-title" id="video-title-display">Interstellar - Official Trailer</h4>
+            <div class="video-meta-tags">
+              <span class="video-meta-sub">Paramount Pictures</span>
+              <span class="video-tag tag-yt">YouTube</span>
+              <span class="video-tag tag-res">4K - 2160p</span>
+            </div>
           </div>
         </div>
 
-        <div class="video-preview-card" id="video-preview-card" style="display: none;">
-          <div class="video-thumbnail-wrap">
-            <div class="video-thumb-placeholder">🎬</div>
+        <div class="video-options-wrap">
+          <div class="form-row video-opt-row">
+            <label class="props-label">Video</label>
+            <select id="video-quality-select" class="theme-dropdown" style="flex: 2;">
+              <option value="2160p">4K (2160p)</option>
+              <option value="1080p">1080p Full HD</option>
+              <option value="720p">720p HD</option>
+            </select>
+            <select class="theme-dropdown" style="flex: 1;">
+              <option value="mp4">MP4</option>
+              <option value="mkv">MKV</option>
+              <option value="webm">WEBM</option>
+            </select>
+            <span class="props-size-hint">~ 1.2 GB</span>
           </div>
-          <div class="video-info-wrap">
-            <h4 id="video-title-display">Video Title</h4>
-            <div class="video-meta-tags">
-              <span class="video-tag" id="video-duration-display">Duration: --:--</span>
-              <span class="video-tag" id="video-codec-display">Format: MP4</span>
+
+          <div class="form-row video-opt-row">
+            <label class="props-label">Audio</label>
+            <select class="theme-dropdown" style="flex: 2;">
+              <option value="320">MP3 (320 kbps)</option>
+              <option value="256">AAC (256 kbps)</option>
+              <option value="flac">FLAC Lossless</option>
+            </select>
+            <span class="props-size-hint" style="flex: 1; text-align: right;">~ 56 MB</span>
+          </div>
+
+          <div class="form-row video-opt-row">
+            <div class="checkbox-row custom-checkbox-row" style="margin: 0; min-width: 100px;">
+              <input type="checkbox" id="video-subtitles-check">
+              <label for="video-subtitles-check">Subtitles</label>
             </div>
-            <div class="form-group" style="margin-top: 12px;">
-              <label>Select Quality / Resolution:</label>
-              <select id="video-quality-select">
-                <option value="1080p">1080p Full HD (MP4)</option>
-                <option value="720p">720p HD (MP4)</option>
-                <option value="480p">480p SD (MP4)</option>
-                <option value="audio">Audio Only (MP3 / 320kbps)</option>
-              </select>
-            </div>
+            <select class="theme-dropdown" style="flex: 1;">
+              <option value="en">English (srt)</option>
+              <option value="es">Spanish (srt)</option>
+            </select>
+          </div>
+
+          <div class="checkbox-row custom-checkbox-row" style="margin-top: 6px;">
+            <input type="checkbox" id="video-thumb-check" checked>
+            <label for="video-thumb-check">Download thumbnail</label>
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="closeModal('modal-video-downloader')">Cancel</button>
-        <button class="btn btn-primary" id="btn-start-video-download" disabled>Download Video</button>
+      <div class="modal-footer add-download-footer">
+        <button class="btn btn-modal-cancel" onclick="closeModal('modal-video-downloader')">Cancel</button>
+        <button class="btn btn-modal-download" id="btn-start-video-download">Download</button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Download Properties & Dynamic Segments -->
+  <!-- Modal: Download Properties (General | Advanced | Scheduler) -->
   <div class="modal-overlay" id="modal-segment-view">
-    <div class="modal-card modal-lg">
+    <div class="modal-card download-props-dialog">
       <div class="modal-header">
-        <div>
-          <h2 id="seg-modal-title">Download Properties</h2>
-          <div class="seg-modal-subtitle" id="seg-modal-filename">filename.zip</div>
+        <div class="modal-title-row">
+          <svg class="modal-header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+            <rect x="3" y="17" width="18" height="4" rx="1"></rect>
+          </svg>
+          <h2 class="modal-title" id="seg-modal-title">Download Properties</h2>
         </div>
         <button class="modal-close" onclick="closeModal('modal-segment-view')">✕</button>
       </div>
+
+      <div class="modal-nav-tabs">
+        <button class="modal-tab-btn active" data-ptab="ptab-general">General</button>
+        <button class="modal-tab-btn" data-ptab="ptab-advanced">Advanced</button>
+        <button class="modal-tab-btn" data-ptab="ptab-scheduler">Scheduler</button>
+      </div>
+
       <div class="modal-body">
-        <div class="seg-metrics-grid">
-          <div class="seg-metric">
-            <span class="seg-metric-label">Downloaded</span>
-            <span class="seg-metric-val" id="seg-modal-downloaded">0 MB / 0 MB</span>
+        <div class="props-tab-pane active" id="ptab-general">
+          <div class="props-file-header">
+            <div id="props-file-icon">
+              <svg width="22" height="26" viewBox="0 0 20 24" fill="none">
+                <path d="M2 2C2 0.895431 2.89543 0 4 0H14L20 6V22C20 23.1046 19.1046 24 18 24H4C2.89543 24 2 23.1046 2 22V2Z" fill="#E2E8F0"/>
+                <path d="M14 0V6H20L14 0Z" fill="#CBD5E1"/>
+              </svg>
+            </div>
+            <div class="props-filename" id="props-display-filename">ubuntu-24.04.2-desktop-amd64.iso</div>
           </div>
-          <div class="seg-metric">
-            <span class="seg-metric-label">Current Speed</span>
-            <span class="seg-metric-val" id="seg-modal-speed">0 KB/s</span>
+
+          <div class="props-form-row">
+            <span class="props-label">URL</span>
+            <div class="input-with-paste props-input-wrap">
+              <input type="text" id="props-url-val" readonly value="https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso">
+              <button class="btn-paste-icon" id="btn-copy-props-url" type="button" title="Copy URL">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              </button>
+            </div>
           </div>
-          <div class="seg-metric">
-            <span class="seg-metric-label">Estimated Time Left</span>
-            <span class="seg-metric-val" id="seg-modal-eta">--:--</span>
+
+          <div class="props-form-row">
+            <span class="props-label">Save to</span>
+            <div class="input-with-button props-input-wrap">
+              <input type="text" id="props-savedir-val" value="D:\Downloads">
+              <button class="btn btn-change-folder" id="btn-browse-props-dir" type="button">Change</button>
+            </div>
           </div>
-          <div class="seg-metric">
-            <span class="seg-metric-label">Active Connections</span>
-            <span class="seg-metric-val" id="seg-modal-conns">0</span>
+
+          <div class="props-form-row">
+            <span class="props-label">Size</span>
+            <span class="props-value" id="seg-modal-downloaded">4.5 GB</span>
+          </div>
+
+          <div class="props-form-row">
+            <span class="props-label">Resume support</span>
+            <span class="props-value props-val-highlight" id="props-resume-support">Yes</span>
+          </div>
+
+          <div class="props-form-row">
+            <span class="props-label">Connections</span>
+            <span class="props-value" id="props-connections-display">16 (Recommended)</span>
           </div>
         </div>
 
-        <div class="visualizer-container">
-          <div class="visualizer-header">
-            <span>Dynamic Multi-Thread Segment Bar (Live Byte Ranges)</span>
-            <span id="seg-modal-percent">0%</span>
+        <div class="props-tab-pane" id="ptab-advanced" style="display: none;">
+          <div class="seg-metrics-grid">
+            <div class="seg-metric">
+              <span class="seg-metric-label">Current Speed</span>
+              <span class="seg-metric-val" id="seg-modal-speed">0 KB/s</span>
+            </div>
+            <div class="seg-metric">
+              <span class="seg-metric-label">Estimated Time Left</span>
+              <span class="seg-metric-val" id="seg-modal-eta">--:--</span>
+            </div>
+            <div class="seg-metric">
+              <span class="seg-metric-label">Active Connections</span>
+              <span class="seg-metric-val" id="seg-modal-conns">16</span>
+            </div>
+            <div class="seg-metric">
+              <span class="seg-metric-label">Progress</span>
+              <span class="seg-metric-val" id="seg-modal-percent">0%</span>
+            </div>
           </div>
-          <div class="segment-bar" id="seg-visualizer-bar">
-            <!-- Dynamic segment blocks -->
+
+          <div class="visualizer-container" style="margin-top: 14px;">
+            <div class="segment-bar" id="seg-visualizer-bar"></div>
+            <div class="segment-legend">
+              <span class="legend-item"><span class="legend-box color-done"></span> Downloaded</span>
+              <span class="legend-item"><span class="legend-box color-active"></span> Active Worker</span>
+              <span class="legend-item"><span class="legend-box color-unassigned"></span> Pending Offset</span>
+            </div>
           </div>
-          <div class="segment-legend">
-            <span class="legend-item"><span class="legend-box color-done"></span> Downloaded</span>
-            <span class="legend-item"><span class="legend-box color-active"></span> Active Worker</span>
-            <span class="legend-item"><span class="legend-box color-unassigned"></span> Pending Offset</span>
+
+          <div class="worker-table-wrap" style="margin-top: 12px; max-height: 140px;">
+            <table class="worker-table">
+              <thead>
+                <tr>
+                  <th>Thread</th>
+                  <th>Start</th>
+                  <th>Current</th>
+                  <th>End</th>
+                  <th>Progress</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="worker-table-tbody"></tbody>
+            </table>
           </div>
         </div>
 
-        <div class="worker-table-wrap">
-          <table class="worker-table">
-            <thead>
-              <tr>
-                <th>Thread #</th>
-                <th>Start Byte</th>
-                <th>Current Byte</th>
-                <th>End Byte</th>
-                <th>Progress</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="worker-table-tbody"></tbody>
-          </table>
+        <div class="props-tab-pane" id="ptab-scheduler" style="display: none;">
+          <div class="form-group">
+            <label class="form-label-subtle">Assigned Queue:</label>
+            <select id="props-queue-select" class="theme-dropdown" style="width: 100%;">
+              <option value="main_queue">Main Download Queue</option>
+              <option value="night_queue">Night Queue</option>
+            </select>
+          </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" onclick="closeModal('modal-segment-view')">Close</button>
+
+      <div class="modal-footer add-download-footer">
+        <button class="btn btn-modal-cancel" onclick="closeModal('modal-segment-view')">Cancel</button>
+        <button class="btn btn-modal-download" onclick="closeModal('modal-segment-view')">OK</button>
       </div>
     </div>
   </div>

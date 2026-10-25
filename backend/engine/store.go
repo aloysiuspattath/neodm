@@ -65,7 +65,7 @@ func DefaultSettings() *Settings {
 		MinInterceptSizeBytes: 1024 * 1024, // 1 MB default
 		SoundAlertOnComplete:  true,
 		DarkTheme:             true,
-		SelectedTheme:         "glass",
+		SelectedTheme:         "nova",
 		StartMinimized:        false,
 		AutoOpenCompleted:     false,
 		NetworkBufferSize:     262144, // 256 KB buffer

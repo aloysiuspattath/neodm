@@ -46,6 +46,9 @@ func NewQueueManager(engine *Engine, store *Store) *QueueManager {
 		for id, q := range store.Settings.Queues {
 			qm.queues[id] = q
 		}
+		if q, exists := qm.queues["main_queue"]; exists {
+			q.Running = true
+		}
 	} else {
 		// Default Main Download Queue
 		qm.queues["main_queue"] = &QueueRecord{
@@ -261,6 +264,9 @@ func (qm *QueueManager) AssignTask(taskID, queueID string) {
 	}
 
 	if q != nil {
+		if q.ID == "main_queue" || !q.ScheduleEnabled {
+			q.Running = true
+		}
 		// Check if already in order
 		for _, existing := range q.Order {
 			if existing == taskID {
