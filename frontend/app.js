@@ -151,13 +151,14 @@ function initQuickDownloadBar() {
   if (!input || !btn) return;
 
   async function handleQuickDownload() {
-    const rawUrl = input.value.trim();
-    if (!rawUrl) {
+    const raw = input.value.trim();
+    if (!raw) {
       input.focus();
       return;
     }
-    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://') && !rawUrl.startsWith('ftp://')) {
-      showToast('Please enter a valid HTTP or HTTPS URL', 'warning');
+    const targetUrl = extractUrlFromText(raw) || raw;
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('ftp://') && !targetUrl.startsWith('magnet:?')) {
+      showToast('Please enter a valid HTTP, HTTPS, or FTP URL', 'warning');
       input.focus();
       return;
     }
@@ -170,7 +171,7 @@ function initQuickDownloadBar() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: rawUrl,
+          url: targetUrl,
           filename: '',
           saveDir: '',
           queueName: 'main_queue'
@@ -180,7 +181,7 @@ function initQuickDownloadBar() {
       const data = await res.json();
       if (data.success) {
         input.value = '';
-        showToast(`⚡ Download started: ${data.task ? data.task.filename : 'File added'}`);
+        showToast(`⚡ Download started: ${data.task ? data.task.filename : 'File added'}`, 'success');
         loadInitialData();
       } else {
         showToast(`Failed: ${data.error || 'Could not start download'}`, 'danger');
@@ -201,14 +202,23 @@ function initQuickDownloadBar() {
     }
   });
 
+  input.addEventListener('paste', () => {
+    setTimeout(() => {
+      const extracted = extractUrlFromText(input.value);
+      if (extracted) {
+        input.value = extracted;
+      }
+    }, 10);
+  });
+
   // Automatically suggest clipboard link when user clicks into the quick input
   input.addEventListener('focus', async () => {
-    if (!input.value.trim() && navigator.clipboard && navigator.clipboard.readText) {
+    if (!input.value.trim()) {
       try {
-        const text = await navigator.clipboard.readText();
-        const trimmed = text ? text.trim() : '';
-        if (trimmed && (trimmed.startsWith('http://') || trimmed.startsWith('https://'))) {
-          input.value = trimmed;
+        const text = await readAppClipboard();
+        const extracted = extractUrlFromText(text);
+        if (extracted) {
+          input.value = extracted;
           input.select();
         }
       } catch (_) {}
@@ -274,27 +284,66 @@ function initNavigationAndToolbar() {
   if (btnPauseAll) btnPauseAll.addEventListener('click', () => batchAction('pause_all'));
 
   const btnDeleteCompleted = document.getElementById('btn-delete-completed');
-  if (btnDeleteCompleted) btnDeleteCompleted.addEventListener('click', () => batchAction('delete_completed'));
+  if (btnDeleteCompleted) {
+    btnDeleteCompleted.addEventListener('click', () => {
+      if (selectedTaskIds.size > 0) {
+        batchAction('delete_selected');
+      } else {
+        batchAction('delete_completed');
+      }
+    });
+  }
 
   // More Actions Dropdown
   const btnMoreActions = document.getElementById('btn-more-actions');
   const moreActionsMenu = document.getElementById('more-actions-menu');
+  const toolbarMoreWrap = document.getElementById('toolbar-more-actions-wrap');
   if (btnMoreActions && moreActionsMenu) {
     btnMoreActions.addEventListener('click', (e) => {
       e.stopPropagation();
-      moreActionsMenu.classList.toggle('open');
+      const isOpen = moreActionsMenu.classList.toggle('open');
+      btnMoreActions.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      if (toolbarMoreWrap) toolbarMoreWrap.classList.toggle('open', isOpen);
     });
-    document.addEventListener('click', () => moreActionsMenu.classList.remove('open'));
+
+    document.addEventListener('click', (e) => {
+      if (!moreActionsMenu.contains(e.target) && e.target !== btnMoreActions) {
+        moreActionsMenu.classList.remove('open');
+        btnMoreActions.setAttribute('aria-expanded', 'false');
+        if (toolbarMoreWrap) toolbarMoreWrap.classList.remove('open');
+      }
+    });
+
+    moreActionsMenu.querySelectorAll('.dropdown-item').forEach(item => {
+      item.addEventListener('click', () => {
+        moreActionsMenu.classList.remove('open');
+        btnMoreActions.setAttribute('aria-expanded', 'false');
+        if (toolbarMoreWrap) toolbarMoreWrap.classList.remove('open');
+      });
+    });
   }
 
   const actionResumeAll = document.getElementById('action-resume-all');
-  if (actionResumeAll) actionResumeAll.addEventListener('click', () => batchAction('start_all'));
+  if (actionResumeAll) actionResumeAll.addEventListener('click', () => {
+    batchAction('start_all');
+  });
 
   const actionPauseAll = document.getElementById('action-pause-all');
-  if (actionPauseAll) actionPauseAll.addEventListener('click', () => batchAction('pause_all'));
+  if (actionPauseAll) actionPauseAll.addEventListener('click', () => {
+    batchAction('pause_all');
+  });
 
   const actionCleanList = document.getElementById('action-clean-list');
-  if (actionCleanList) actionCleanList.addEventListener('click', () => batchAction('delete_completed'));
+  if (actionCleanList) actionCleanList.addEventListener('click', () => {
+    batchAction('delete_completed');
+  });
+
+  const actionDeleteAllFiles = document.getElementById('action-delete-all-files');
+  if (actionDeleteAllFiles) actionDeleteAllFiles.addEventListener('click', () => {
+    if (confirm('Are you sure you want to delete ALL downloaded files on disk? This cannot be undone.')) {
+      batchAction('delete_all_files');
+    }
+  });
 
   // Filter Dropdown
   const statusFilter = document.getElementById('status-filter');
@@ -430,32 +479,112 @@ function drawSplineArea(ctx, width, height, data, strokeColor, fillColor) {
   ctx.fill();
 }
 
+// Robust URL extractor supporting quoted strings, multi-line blocks, angle brackets, and protocols
+function extractUrlFromText(text) {
+  if (!text || typeof text !== 'string') return '';
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+
+  // Match http, https, ftp, or magnet URI anywhere in text
+  const match = trimmed.match(/(https?:\/\/[^\s"'<>]+|ftp:\/\/[^\s"'<>]+|magnet:\?[^\s"'<>]+)/i);
+  if (match) {
+    let url = match[0].trim();
+    // Strip trailing punctuation like .,;:)>]
+    url = url.replace(/[.,;:)>\]]+$/, '');
+    return url;
+  }
+  return '';
+}
+
+// Native & Web Clipboard Reader with Triple-Fallback
+async function readAppClipboard() {
+  if (typeof window.nativeReadClipboard === 'function') {
+    try {
+      const text = await window.nativeReadClipboard();
+      if (text && typeof text === 'string') return text.trim();
+    } catch (_) {}
+  }
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && typeof text === 'string') return text.trim();
+    } catch (_) {}
+  }
+  try {
+    const res = await fetch('/api/clipboard/read');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.text) return data.text.trim();
+    }
+  } catch (_) {}
+  return '';
+}
+
 // Shortcuts & Drag and Drop
 function initShortcutsAndDragDrop() {
-  // Global Ctrl+V / Ctrl+N
-  window.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-      navigator.clipboard.readText().then(text => {
-        if (text && (text.startsWith('http://') || text.startsWith('https://'))) {
-          openModal('modal-add-download');
-          switchAddTab('tab-add-url');
-          const input = document.getElementById('add-url-input');
-          if (input) {
-            input.value = text.trim();
-            setTimeout(() => input.focus(), 100);
-          }
-          showToast('URL automatically pasted from clipboard');
-        }
-      }).catch(() => {});
+  // Global Ctrl+V / Ctrl+N / Ctrl+F / Escape
+  window.addEventListener('keydown', async (e) => {
+    // Escape key closes open menus and modals
+    if (e.key === 'Escape') {
+      const moreActionsMenu = document.getElementById('more-actions-menu');
+      if (moreActionsMenu) moreActionsMenu.classList.remove('open');
+      const ctxMenu = document.getElementById('custom-context-menu');
+      if (ctxMenu) ctxMenu.style.display = 'none';
+      document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+      return;
     }
 
-    if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+    // Native Ctrl+V handling anywhere in the app
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V' || e.code === 'KeyV')) {
+      const activeEl = document.activeElement;
+      const tag = activeEl ? activeEl.tagName : '';
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || activeEl?.isContentEditable;
+      const isQuickInput = activeEl && activeEl.id === 'quick-url-input';
+      if (isInput && !isQuickInput) {
+        return; // Allow native paste into active input controls (e.g. search, add URL dialog)
+      }
+
+      e.preventDefault();
+      const text = await readAppClipboard();
+      if (!text) {
+        showToast('Clipboard is empty', 'warning');
+        return;
+      }
+
+      const extracted = extractUrlFromText(text);
+      if (extracted) {
+        const quickInput = document.getElementById('quick-url-input');
+        if (quickInput) {
+          quickInput.value = extracted;
+          quickInput.focus();
+          quickInput.select();
+
+          const wrap = document.querySelector('.quick-input-wrap');
+          if (wrap) {
+            wrap.classList.add('clipboard-highlight');
+            setTimeout(() => wrap.classList.remove('clipboard-highlight'), 1200);
+          }
+
+          const domain = extractDomain(extracted);
+          showToast(`⚡ Link detected: ${domain || extracted}`, 'info', {
+            text: 'Download Now',
+            onClick: () => {
+              const btn = document.getElementById('btn-quick-start');
+              if (btn) btn.click();
+            }
+          });
+        }
+      } else {
+        showToast('Clipboard does not contain a valid URL', 'warning');
+      }
+    }
+
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
       e.preventDefault();
       openModal('modal-add-download');
     }
 
-    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
       e.preventDefault();
       const s = document.getElementById('global-search-input');
       if (s) s.focus();
@@ -669,6 +798,27 @@ function handleWebSocketMessage(msg) {
   } else if (msg.type === 'task_deleted') {
     downloads = downloads.filter(d => d.id !== msg.data.id);
     renderDownloads();
+  } else if (msg.type === 'clipboard_url') {
+    const raw = typeof msg.data === 'string' ? msg.data : (msg.data?.url || '');
+    const url = extractUrlFromText(raw);
+    if (url) {
+      const quickInput = document.getElementById('quick-url-input');
+      if (quickInput && !quickInput.value.trim()) {
+        quickInput.value = url.trim();
+        const wrap = document.querySelector('.quick-input-wrap');
+        if (wrap) {
+          wrap.classList.add('clipboard-highlight');
+          setTimeout(() => wrap.classList.remove('clipboard-highlight'), 1200);
+        }
+        showToast(`⚡ Link detected: ${extractDomain(url)}`, 'info', {
+          text: 'Download Now',
+          onClick: () => {
+            const btn = document.getElementById('btn-quick-start');
+            if (btn) btn.click();
+          }
+        });
+      }
+    }
   }
 }
 
@@ -801,8 +951,17 @@ function renderDownloads() {
   const tbody = document.getElementById('downloads-tbody');
   const grid = document.getElementById('downloads-grid');
   const emptyState = document.getElementById('empty-state');
+  const deleteBtnLabel = document.getElementById('btn-delete-label');
+  const deleteBtn = document.getElementById('btn-delete-completed');
 
   updateCategoryBadges();
+
+  if (deleteBtnLabel) {
+    deleteBtnLabel.textContent = selectedTaskIds.size > 0 ? `Delete (${selectedTaskIds.size})` : 'Delete';
+  }
+  if (deleteBtn) {
+    deleteBtn.title = selectedTaskIds.size > 0 ? 'Delete Selected Downloads' : 'Clear Completed Downloads';
+  }
 
   if (filtered.length === 0) {
     if (tbody) tbody.innerHTML = '';
@@ -864,6 +1023,8 @@ function renderTableRow(d) {
         <div class="row-actions">
           ${d.status === 'Downloading' ? `
             <button class="btn-row-action" data-action="pause" title="Pause">⏸</button>
+          ` : d.status === 'Completed' ? `
+            <button class="btn-row-action" data-action="open-file" title="Open File">📄</button>
           ` : `
             <button class="btn-row-action" data-action="resume" title="Resume">▶</button>
           `}
@@ -879,20 +1040,48 @@ function renderTableRow(d) {
 function renderGridCard(d) {
   const percent = calculatePercent(d);
   const icon = getFileIcon(d.filename, d.category);
+  const isSelected = selectedTaskIds.has(d.id);
+  const speedText = (d.status === 'Downloading' && d.speed > 0) ? formatSpeed(d.speed) : (d.status === 'Completed' ? 'Complete' : '—');
+  const sizeText = formatSize(d.downloadedBytes || 0) + ' / ' + formatSize(d.totalSize || 0);
+  const domain = extractDomain(d.url);
 
   return `
-    <div class="grid-card ${selectedTaskIds.has(d.id) ? 'selected' : ''}" data-id="${d.id}">
-      <div class="grid-card-top">
-        <span class="file-icon-badge">${icon}</span>
+    <div class="grid-card ${isSelected ? 'selected' : ''}" data-id="${d.id}">
+      <div class="grid-card-header">
+        <div class="grid-card-identity">
+          <div class="grid-card-icon">${icon}</div>
+          <div class="grid-card-title-wrap">
+            <h4 class="grid-card-title" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</h4>
+            <span class="grid-card-domain">${escapeHtml(domain)}</span>
+          </div>
+        </div>
         <span class="status-pill status-${d.status.toLowerCase()}">${d.status}</span>
       </div>
-      <h4 class="grid-card-title" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</h4>
-      <div class="progress-track" style="margin: 8px 0 4px 0;">
-        <div class="progress-fill ${d.status.toLowerCase()}" style="width: ${percent}%;"></div>
+
+      <div class="grid-card-progress-wrap">
+        <div class="grid-card-progress-info">
+          <span class="grid-card-percent">${percent}%</span>
+          <span class="grid-card-speed">${speedText}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill ${d.status.toLowerCase()}" style="width: ${percent}%;"></div>
+        </div>
       </div>
-      <div class="grid-card-meta">
-        <span>${percent}%</span>
-        <span>${formatSize(d.downloadedBytes || 0)} / ${formatSize(d.totalSize || 0)}</span>
+
+      <div class="grid-card-actions">
+        <span class="grid-card-size-info">${sizeText}</span>
+        <div class="row-actions">
+          ${d.status === 'Downloading' ? `
+            <button class="btn-row-action" data-action="pause" title="Pause">⏸</button>
+          ` : d.status === 'Completed' ? `
+            <button class="btn-row-action" data-action="open-file" title="Open File">📄</button>
+          ` : `
+            <button class="btn-row-action" data-action="resume" title="Resume">▶</button>
+          `}
+          <button class="btn-row-action" data-action="folder" title="Open Folder">📁</button>
+          <button class="btn-row-action action-delete" data-action="delete" title="Delete">✕</button>
+          <button class="btn-row-action" data-action="inspect" title="Segments & Details">···</button>
+        </div>
       </div>
     </div>
   `;
@@ -920,7 +1109,23 @@ function attachRowEventListeners() {
       renderDownloads();
     });
 
+    // Double click to open completed file or inspect segments
+    row.addEventListener('dblclick', (e) => {
+      if (e.target.closest('button, input')) return;
+      const task = downloads.find(d => d.id === id);
+      if (task?.status === 'Completed' && (task.finalPath || task.savePath)) {
+        openFileOrFolder(task.finalPath || task.savePath, 'file');
+      } else {
+        openSegmentVisualizer(id);
+      }
+    });
+
     // Action buttons
+    row.querySelector('[data-action="open-file"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const task = downloads.find(d => d.id === id);
+      if (task?.finalPath || task?.savePath) openFileOrFolder(task.finalPath || task.savePath, 'file');
+    });
     row.querySelector('[data-action="pause"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       downloadAction(id, 'pause');
@@ -948,39 +1153,94 @@ function attachRowEventListeners() {
 function attachGridEventListeners() {
   document.querySelectorAll('.grid-card[data-id]').forEach(card => {
     const id = card.getAttribute('data-id');
-    card.addEventListener('click', () => {
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
       if (selectedTaskIds.has(id)) selectedTaskIds.delete(id);
       else selectedTaskIds.add(id);
       renderDownloads();
     });
-    card.addEventListener('dblclick', () => openSegmentVisualizer(id));
+
+    card.addEventListener('dblclick', (e) => {
+      if (e.target.closest('button, input')) return;
+      const task = downloads.find(d => d.id === id);
+      if (task?.status === 'Completed' && (task.finalPath || task.savePath)) {
+        openFileOrFolder(task.finalPath || task.savePath, 'file');
+      } else {
+        openSegmentVisualizer(id);
+      }
+    });
+
+    card.querySelector('[data-action="open-file"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const task = downloads.find(d => d.id === id);
+      if (task?.finalPath || task?.savePath) openFileOrFolder(task.finalPath || task.savePath, 'file');
+    });
+    card.querySelector('[data-action="pause"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadAction(id, 'pause');
+    });
+    card.querySelector('[data-action="resume"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadAction(id, 'resume');
+    });
+    card.querySelector('[data-action="folder"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const task = downloads.find(d => d.id === id);
+      if (task?.savePath) openFileOrFolder(task.savePath, 'folder');
+    });
+    card.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      downloadAction(id, 'delete');
+    });
+    card.querySelector('[data-action="inspect"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSegmentVisualizer(id);
+    });
   });
 }
 
 function updateLiveRowElements() {
   downloads.forEach(d => {
-    const row = document.querySelector(`tr[data-id="${d.id}"]`);
-    if (!row) return;
-
     const percent = calculatePercent(d);
     const speedText = (d.status === 'Downloading' && d.speed > 0) ? formatSpeed(d.speed) : '—';
     const sizeText = formatSize(d.downloadedBytes || 0) + ' / ' + formatSize(d.totalSize || 0);
     const etaText = (d.status === 'Downloading' && d.eta > 0) ? formatETA(d.eta) : (d.status === 'Completed' ? 'Complete' : '—');
 
-    const percentEl = row.querySelector('.row-percent');
-    if (percentEl) percentEl.textContent = `${percent}%`;
+    // Update table row if present
+    const row = document.querySelector(`tr[data-id="${d.id}"]`);
+    if (row) {
+      const percentEl = row.querySelector('.row-percent');
+      if (percentEl) percentEl.textContent = `${percent}%`;
 
-    const fillEl = row.querySelector('.progress-fill');
-    if (fillEl) fillEl.style.width = `${percent}%`;
+      const fillEl = row.querySelector('.progress-fill');
+      if (fillEl) fillEl.style.width = `${percent}%`;
 
-    const speedEl = row.querySelector('.row-speed');
-    if (speedEl) speedEl.textContent = speedText;
+      const speedEl = row.querySelector('.row-speed');
+      if (speedEl) speedEl.textContent = speedText;
 
-    const sizeEl = row.querySelector('.row-size');
-    if (sizeEl) sizeEl.textContent = sizeText;
+      const sizeEl = row.querySelector('.row-size');
+      if (sizeEl) sizeEl.textContent = sizeText;
 
-    const etaEl = row.querySelector('.row-eta');
-    if (etaEl) etaEl.textContent = etaText;
+      const etaEl = row.querySelector('.row-eta');
+      if (etaEl) etaEl.textContent = etaText;
+    }
+
+    // Update grid card if present
+    const card = document.querySelector(`.grid-card[data-id="${d.id}"]`);
+    if (card) {
+      const cardFill = card.querySelector('.progress-fill');
+      if (cardFill) cardFill.style.width = `${percent}%`;
+
+      const cardPercent = card.querySelector('.grid-card-percent');
+      if (cardPercent) cardPercent.textContent = `${percent}%`;
+
+      const cardSpeed = card.querySelector('.grid-card-speed');
+      if (cardSpeed) cardSpeed.textContent = (d.status === 'Downloading' && d.speed > 0) ? speedText : (d.status === 'Completed' ? 'Complete' : '—');
+
+      const cardSize = card.querySelector('.grid-card-size-info');
+      if (cardSize) cardSize.textContent = sizeText;
+    }
   });
 }
 
@@ -1107,6 +1367,15 @@ function initModals() {
     btn.addEventListener('click', () => {
       const tabId = btn.getAttribute('data-tab');
       switchAddTab(tabId);
+    });
+  });
+
+  // Click on modal backdrop to dismiss
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        closeModal(overlay.id);
+      }
     });
   });
 
@@ -1609,21 +1878,52 @@ function closeModal(id) {
 }
 
 // Toast Notifications
-function showToast(message) {
+function showToast(message, type = 'info', action = null) {
   const container = document.getElementById('toast-container');
   if (!container) return;
 
   const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.innerHTML = `<span>⚡</span><span>${escapeHtml(message)}</span>`;
+  toast.className = `toast toast-${type}`;
+
+  const iconMap = {
+    info: '⚡',
+    success: '✓',
+    warning: '⚠️',
+    danger: '✕'
+  };
+  const icon = iconMap[type] || '⚡';
+
+  let actionHtml = '';
+  if (action && action.text) {
+    actionHtml = `<button class="btn btn-sm btn-primary toast-action-btn" type="button">${escapeHtml(action.text)}</button>`;
+  }
+
+  toast.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <span class="toast-message">${escapeHtml(message)}</span>
+    ${actionHtml}
+  `;
+
+  if (action && action.onClick) {
+    const btn = toast.querySelector('.toast-action-btn');
+    if (btn) {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        action.onClick();
+        toast.remove();
+      });
+    }
+  }
+
   container.appendChild(toast);
 
+  const duration = action ? 5000 : 3000;
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(8px)';
     toast.style.transition = 'all 0.2s';
     setTimeout(() => toast.remove(), 200);
-  }, 2800);
+  }, duration);
 }
 
 // Utilities

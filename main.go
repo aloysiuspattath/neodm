@@ -144,6 +144,11 @@ func openWebView(url string, startMinimized bool) {
 		return nil
 	})
 
+	// Bind native clipboard reader for instant zero-permission clipboard access
+	_ = w.Bind("nativeReadClipboard", func() (string, error) {
+		return platform.GetClipboardText(), nil
+	})
+
 	w.SetSize(1100, 720, webview2.HintNone)
 	w.Navigate(url)
 

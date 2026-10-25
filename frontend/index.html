@@ -305,18 +305,30 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
               <span>Pause All</span>
             </button>
-            <button class="btn btn-action btn-action-danger" id="btn-delete-completed" title="Clear Completed Downloads">
+            <button class="btn btn-action btn-action-danger" id="btn-delete-completed" title="Delete Selected or Clear Completed Downloads">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              <span>Delete</span>
+              <span id="btn-delete-label">Delete</span>
             </button>
-            <div class="dropdown-wrap">
-              <button class="btn btn-action btn-icon-only" id="btn-more-actions" title="More Actions">···</button>
+            <div class="dropdown-wrap" id="toolbar-more-actions-wrap">
+              <button class="btn btn-action btn-icon-only" id="btn-more-actions" title="More Actions" aria-haspopup="true" aria-expanded="false">···</button>
               <div class="dropdown-menu" id="more-actions-menu">
-                <div class="dropdown-item" id="action-resume-all">▶ Resume All</div>
-                <div class="dropdown-item" id="action-pause-all">⏸ Pause All</div>
+                <div class="dropdown-item" id="action-resume-all">
+                  <span class="dropdown-item-icon">▶</span>
+                  <span>Resume All</span>
+                </div>
+                <div class="dropdown-item" id="action-pause-all">
+                  <span class="dropdown-item-icon">⏸</span>
+                  <span>Pause All</span>
+                </div>
                 <div class="dropdown-divider"></div>
-                <div class="dropdown-item" id="action-clean-list">🧹 Remove Finished from List</div>
-                <div class="dropdown-item text-danger" id="action-delete-all-files">❌ Delete All Files on Disk</div>
+                <div class="dropdown-item" id="action-clean-list">
+                  <span class="dropdown-item-icon">🧹</span>
+                  <span>Remove Finished from List</span>
+                </div>
+                <div class="dropdown-item text-danger" id="action-delete-all-files">
+                  <span class="dropdown-item-icon">❌</span>
+                  <span>Delete All Files on Disk</span>
+                </div>
               </div>
             </div>
           </div>
@@ -348,7 +360,7 @@
         <div class="quick-download-strip">
           <div class="quick-input-wrap">
             <span class="quick-icon">⚡</span>
-            <input type="text" id="quick-url-input" placeholder="Paste download URL here and press Enter to download..." autocomplete="off">
+            <input type="text" id="quick-url-input" placeholder="Paste download URL here (or press Ctrl+V anywhere) and press Enter..." autocomplete="off">
           </div>
           <button class="btn btn-quick-download" id="btn-quick-start">Download Now</button>
         </div>
@@ -358,16 +370,16 @@
           <table class="downloads-table" id="main-downloads-table">
             <thead>
               <tr>
-                <th style="width: 36px; text-align: center;">
+                <th style="width: 40px; text-align: center;">
                   <input type="checkbox" id="check-all-downloads" title="Select All">
                 </th>
                 <th>File Name</th>
-                <th style="width: 120px;">Status</th>
-                <th style="width: 180px;">Progress</th>
+                <th style="width: 110px;">Status</th>
+                <th style="width: 175px;">Progress</th>
                 <th style="width: 110px;">Transfer Speed</th>
-                <th style="width: 110px;">File Size</th>
+                <th style="width: 125px;">File Size</th>
                 <th style="width: 95px;">Time Left</th>
-                <th style="width: 120px; text-align: right;">Actions</th>
+                <th style="width: 155px; text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="downloads-tbody">

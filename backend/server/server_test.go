@@ -330,4 +330,35 @@ func TestBatchActionsAPI(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Batch start_all returned %d", rec.Code)
 	}
+
+	// Delete all files
+	body, _ = json.Marshal(BatchActionReq{Action: "delete_all_files"})
+	req = httptest.NewRequest("POST", "/api/download/batch_action", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	srv.handleBatchAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Batch delete_all_files returned %d", rec.Code)
+	}
+}
+
+// TestClipboardAPI tests the /api/clipboard/read endpoint
+func TestClipboardAPI(t *testing.T) {
+	srv, _, tmpDir := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	req := httptest.NewRequest("GET", "/api/clipboard/read", nil)
+	rec := httptest.NewRecorder()
+	srv.handleReadClipboard(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleReadClipboard returned %d", rec.Code)
+	}
+
+	var res map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+	if success, ok := res["success"].(bool); !ok || !success {
+		t.Fatalf("Expected success true, got %v", res["success"])
+	}
 }

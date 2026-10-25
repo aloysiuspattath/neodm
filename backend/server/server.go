@@ -80,6 +80,7 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/open", s.cors(s.handleOpenFileOrFolder))
 	mux.HandleFunc("/api/select_folder", s.cors(s.handleSelectFolder))
 	mux.HandleFunc("/api/window/action", s.cors(s.handleWindowAction))
+	mux.HandleFunc("/api/clipboard/read", s.cors(s.handleReadClipboard))
 
 	// Static frontend
 	if s.frontend != nil {
@@ -303,6 +304,22 @@ func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
 			t := s.engine.GetTask(id)
 			if t != nil {
 				t.Cancel(false)
+				s.hub.BroadcastEvent("task_deleted", map[string]string{"id": id})
+			}
+		}
+	case "delete_all_files":
+		for _, rec := range allTasks {
+			t := s.engine.GetTask(rec.ID)
+			if t != nil {
+				t.Cancel(true)
+				s.hub.BroadcastEvent("task_deleted", map[string]string{"id": rec.ID})
+			}
+		}
+	case "delete_selected_files":
+		for _, id := range req.IDs {
+			t := s.engine.GetTask(id)
+			if t != nil {
+				t.Cancel(true)
 				s.hub.BroadcastEvent("task_deleted", map[string]string{"id": id})
 			}
 		}
@@ -613,4 +630,13 @@ func (s *Server) handleSelectFolder(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "path": selectedPath})
+}
+
+func (s *Server) handleReadClipboard(w http.ResponseWriter, r *http.Request) {
+	text := platform.GetClipboardText()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"text":    text,
+	})
 }
