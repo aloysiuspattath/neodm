@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"ifd/backend/engine"
+	"ifd/backend/grabber"
 )
 
 func setupTestServer(t *testing.T) (*Server, *engine.Engine, string) {
@@ -33,9 +34,11 @@ func setupTestServer(t *testing.T) (*Server, *engine.Engine, string) {
 	go hub.Run()
 
 	srv := &Server{
-		engine: eng,
-		store:  store,
-		hub:    hub,
+		engine:        eng,
+		store:         store,
+		grabber:       grabber.NewSiteGrabber(),
+		videoAnalyzer: grabber.NewVideoAnalyzer(),
+		hub:           hub,
 	}
 
 	return srv, eng, tmpDir
@@ -466,5 +469,63 @@ func TestAddDownloadImmediateDataTransfer(t *testing.T) {
 	}
 	if !bytes.Equal(content, testPayload) {
 		t.Errorf("File content mismatch: expected %q, got %q", string(testPayload), string(content))
+	}
+}
+
+func TestVideoEndpoints(t *testing.T) {
+	srv, eng, tmpDir := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	videoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Header().Set("Content-Length", "2048")
+		w.WriteHeader(http.StatusOK)
+		w.Write(make([]byte, 2048))
+	}))
+	defer videoServer.Close()
+
+	// 1. Analyze endpoint
+	analyzeBody, _ := json.Marshal(VideoAnalyzeReq{URL: videoServer.URL + "/clip.mp4"})
+	req := httptest.NewRequest("POST", "/api/video/analyze", bytes.NewReader(analyzeBody))
+	rec := httptest.NewRecorder()
+	srv.handleVideoAnalyze(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleVideoAnalyze failed with %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var info grabber.VideoInfo
+	if err := json.Unmarshal(rec.Body.Bytes(), &info); err != nil {
+		t.Fatalf("Failed to decode video info: %v", err)
+	}
+	if len(info.Formats) == 0 {
+		t.Errorf("Expected at least 1 video format")
+	}
+
+	// 2. Download endpoint
+	dlBody, _ := json.Marshal(VideoDownloadReq{
+		URL:      videoServer.URL + "/clip.mp4",
+		Filename: "clip.mp4",
+		SaveDir:  tmpDir,
+		Quality:  "1080p",
+	})
+	req = httptest.NewRequest("POST", "/api/video/download", bytes.NewReader(dlBody))
+	rec = httptest.NewRecorder()
+	srv.handleVideoDownload(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleVideoDownload failed with %d: %s", rec.Code, rec.Body.String())
+	}
+
+	tasks := eng.GetAllTasks()
+	found := false
+	for _, tk := range tasks {
+		if tk.Filename == "clip.mp4" && tk.Category == "Videos" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected video task with Category Videos in engine")
 	}
 }

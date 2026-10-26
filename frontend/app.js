@@ -89,13 +89,17 @@ function initTitlebarAndThemes() {
     });
   }
 
-  // Bento Theme Switcher: Dark & Light
+  // Bento Multi-Theme Switcher (Dark, Light, Midnight Obsidian, Forest Emerald)
   const themeBtnDark = document.getElementById('theme-btn-dark');
   const themeBtnLight = document.getElementById('theme-btn-light');
+  const themeBtnMidnight = document.getElementById('theme-btn-midnight');
+  const themeBtnEmerald = document.getElementById('theme-btn-emerald');
   const themeSelector = document.getElementById('theme-selector');
   const settingThemePicker = document.getElementById('setting-theme-picker');
+  
+  const validThemes = ['dark', 'light', 'midnight', 'emerald'];
   let savedTheme = localStorage.getItem('neodm-theme') || 'dark';
-  if (savedTheme !== 'light' && savedTheme !== 'dark') {
+  if (!validThemes.includes(savedTheme)) {
     savedTheme = 'dark';
   }
 
@@ -106,6 +110,12 @@ function initTitlebarAndThemes() {
   }
   if (themeBtnLight) {
     themeBtnLight.addEventListener('click', () => applyTheme('light', true));
+  }
+  if (themeBtnMidnight) {
+    themeBtnMidnight.addEventListener('click', () => applyTheme('midnight', true));
+  }
+  if (themeBtnEmerald) {
+    themeBtnEmerald.addEventListener('click', () => applyTheme('emerald', true));
   }
   if (themeSelector) {
     themeSelector.value = savedTheme;
@@ -118,15 +128,22 @@ function initTitlebarAndThemes() {
 }
 
 function applyTheme(theme, notify = true) {
-  if (theme !== 'light' && theme !== 'dark') theme = 'dark';
+  const validThemes = ['dark', 'light', 'midnight', 'emerald'];
+  if (!validThemes.includes(theme)) theme = 'dark';
+  
   document.documentElement.setAttribute('data-theme', theme);
-  document.documentElement.style.colorScheme = theme;
+  document.documentElement.style.colorScheme = (theme === 'light') ? 'light' : 'dark';
   localStorage.setItem('neodm-theme', theme);
 
   const themeBtnDark = document.getElementById('theme-btn-dark');
   const themeBtnLight = document.getElementById('theme-btn-light');
+  const themeBtnMidnight = document.getElementById('theme-btn-midnight');
+  const themeBtnEmerald = document.getElementById('theme-btn-emerald');
+  
   if (themeBtnDark) themeBtnDark.classList.toggle('active', theme === 'dark');
   if (themeBtnLight) themeBtnLight.classList.toggle('active', theme === 'light');
+  if (themeBtnMidnight) themeBtnMidnight.classList.toggle('active', theme === 'midnight');
+  if (themeBtnEmerald) themeBtnEmerald.classList.toggle('active', theme === 'emerald');
 
   const themeSelector = document.getElementById('theme-selector');
   if (themeSelector) themeSelector.value = theme;
@@ -135,10 +152,12 @@ function applyTheme(theme, notify = true) {
 
   const names = {
     dark: '🌙 Bento Dark',
-    light: '☀️ Bento Light'
+    light: '☀️ Bento Light',
+    midnight: '🌌 Midnight Obsidian',
+    emerald: '🌲 Forest Emerald'
   };
   if (notify) {
-    showToast(`Theme: ${names[theme] || theme}`);
+    showToast(`Theme changed: ${names[theme] || theme}`, 'info');
   }
 }
 
@@ -278,7 +297,7 @@ function initNavigationAndToolbar() {
   if (toolBrowser) toolBrowser.addEventListener('click', () => openModal('modal-browser-integration'));
 
   const toolVideo = document.getElementById('tool-video-downloader');
-  if (toolVideo) toolVideo.addEventListener('click', () => openModal('modal-video-downloader'));
+  if (toolVideo) toolVideo.addEventListener('click', () => openVideoDownloaderModal());
 
   const toolBatch = document.getElementById('tool-batch-downloader');
   if (toolBatch) toolBatch.addEventListener('click', () => {
@@ -2216,31 +2235,222 @@ function initModals() {
     });
   }
 
-  // Video Downloader Tab Switching
-  document.querySelectorAll('#modal-video-downloader .modal-tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#modal-video-downloader .modal-tab-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    });
-  });
+  // Video Downloader Logic & State
+  let currentVideoAnalysis = null;
 
-  // Video Downloader Analyze & Download Actions
+  window.openVideoDownloaderModal = async function() {
+    openModal('modal-video-downloader');
+    const urlInput = document.getElementById('video-url-input');
+    const folderInput = document.getElementById('video-folder-input');
+
+    // Retrieve default download folder for Videos
+    try {
+      const resp = await fetch('/api/settings');
+      if (resp.ok) {
+        const s = await resp.json();
+        if (folderInput) {
+          folderInput.value = (s.categoryFolders && s.categoryFolders['Videos']) || s.defaultDownloadDir || 'Downloads';
+        }
+      }
+    } catch (_) {}
+
+    // Check if clipboard contains a valid video URL
+    try {
+      const text = await readAppClipboard();
+      const extracted = extractUrlFromText(text);
+      if (extracted && urlInput && (!urlInput.value || urlInput.value.trim() === '')) {
+        urlInput.value = extracted;
+        showToast('Pasted media URL from clipboard', 'info');
+      }
+    } catch (_) {}
+
+    if (urlInput) setTimeout(() => urlInput.focus(), 120);
+  };
+
+  const btnPasteVideoUrl = document.getElementById('btn-paste-video-url');
+  if (btnPasteVideoUrl) {
+    btnPasteVideoUrl.addEventListener('click', async () => {
+      try {
+        const text = await readAppClipboard();
+        const extracted = extractUrlFromText(text);
+        if (extracted) {
+          const input = document.getElementById('video-url-input');
+          if (input) input.value = extracted;
+          showToast('Pasted video URL', 'info');
+        } else {
+          showToast('Clipboard does not contain a valid URL', 'warning');
+        }
+      } catch (_) {
+        showToast('Could not read clipboard', 'error');
+      }
+    });
+  }
+
+  const btnBrowseVideoFolder = document.getElementById('btn-browse-video-folder');
+  if (btnBrowseVideoFolder) {
+    btnBrowseVideoFolder.addEventListener('click', async () => {
+      try {
+        const resp = await fetch('/api/folder/select', { method: 'POST' });
+        const data = await resp.json();
+        if (data && data.success && data.path) {
+          const folderInput = document.getElementById('video-folder-input');
+          if (folderInput) folderInput.value = data.path;
+        }
+      } catch (err) {
+        console.warn('Folder selection error:', err);
+      }
+    });
+  }
+
   const btnAnalyzeVideo = document.getElementById('btn-analyze-video');
   if (btnAnalyzeVideo) {
-    btnAnalyzeVideo.addEventListener('click', () => {
-      showToast('Video stream analysis complete: 4K 2160p (MP4)', 'success');
-      const card = document.getElementById('video-preview-card');
-      if (card) card.style.display = 'flex';
+    btnAnalyzeVideo.addEventListener('click', async () => {
+      const urlInput = document.getElementById('video-url-input');
+      const url = urlInput ? urlInput.value.trim() : '';
+      if (!url) {
+        showToast('Please enter or paste a video URL first', 'warning');
+        return;
+      }
+
+      const spinner = document.getElementById('video-analyze-spinner');
+      const previewCard = document.getElementById('video-preview-card');
+      const optionsWrap = document.getElementById('video-options-wrap');
       const startBtn = document.getElementById('btn-start-video-download');
-      if (startBtn) startBtn.disabled = false;
+      const analyzeText = document.getElementById('btn-analyze-text');
+
+      if (spinner) spinner.style.display = 'flex';
+      if (previewCard) previewCard.style.display = 'none';
+      if (optionsWrap) optionsWrap.style.display = 'none';
+      if (startBtn) startBtn.disabled = true;
+      btnAnalyzeVideo.disabled = true;
+      if (analyzeText) analyzeText.textContent = 'Probing...';
+
+      try {
+        const resp = await fetch('/api/video/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(errText || 'Failed to analyze video');
+        }
+
+        const info = await resp.json();
+        currentVideoAnalysis = info;
+
+        // Populate metadata
+        const titleEl = document.getElementById('video-title-display');
+        const authorEl = document.getElementById('video-author-display');
+        const platformEl = document.getElementById('video-platform-display');
+        const durationEl = document.getElementById('video-duration-display');
+        const thumbImg = document.getElementById('video-thumb-img-element');
+        const thumbPlaceholder = document.getElementById('video-thumb-placeholder');
+        const filenameInput = document.getElementById('video-filename-input');
+        const qualitySelect = document.getElementById('video-quality-select');
+
+        if (titleEl) titleEl.textContent = info.title || 'Untitled Video';
+        if (authorEl) authorEl.textContent = info.author || 'Web Media';
+        if (platformEl) platformEl.textContent = info.platform || 'Stream';
+        if (durationEl) durationEl.textContent = info.duration || 'Live / Stream';
+
+        if (thumbImg && thumbPlaceholder) {
+          if (info.thumbnail && info.thumbnail.trim() !== '') {
+            thumbImg.src = info.thumbnail;
+            thumbImg.style.display = 'block';
+            thumbPlaceholder.style.display = 'none';
+          } else {
+            thumbImg.style.display = 'none';
+            thumbPlaceholder.style.display = 'flex';
+          }
+        }
+
+        if (filenameInput) {
+          filenameInput.value = info.filename || 'video.mp4';
+        }
+
+        if (qualitySelect) {
+          qualitySelect.innerHTML = '';
+          if (info.formats && info.formats.length > 0) {
+            info.formats.forEach((fmt, idx) => {
+              const opt = document.createElement('option');
+              opt.value = fmt.url || info.bestUrl || url;
+              opt.setAttribute('data-quality', fmt.quality || '');
+              opt.setAttribute('data-format', fmt.format || '');
+              const sizeLabel = fmt.sizeText ? ` (${fmt.sizeText})` : '';
+              opt.textContent = `${fmt.quality} - ${fmt.format}${sizeLabel}`;
+              if (idx === 0) opt.selected = true;
+              qualitySelect.appendChild(opt);
+            });
+          } else {
+            const opt = document.createElement('option');
+            opt.value = info.bestUrl || url;
+            opt.textContent = `Direct Stream (${info.platform})`;
+            opt.selected = true;
+            qualitySelect.appendChild(opt);
+          }
+        }
+
+        if (previewCard) previewCard.style.display = 'flex';
+        if (optionsWrap) optionsWrap.style.display = 'block';
+        if (startBtn) startBtn.disabled = false;
+
+        showToast(`Stream ready: ${info.title}`, 'success');
+      } catch (err) {
+        showToast(`Analysis error: ${err.message}`, 'error');
+      } finally {
+        if (spinner) spinner.style.display = 'none';
+        btnAnalyzeVideo.disabled = false;
+        if (analyzeText) analyzeText.textContent = 'Analyze';
+      }
     });
   }
 
   const btnStartVideo = document.getElementById('btn-start-video-download');
   if (btnStartVideo) {
-    btnStartVideo.addEventListener('click', () => {
-      closeModal('modal-video-downloader');
-      showToast('Download started: Interstellar - Official Trailer (4K)', 'success');
+    btnStartVideo.addEventListener('click', async () => {
+      const qualitySelect = document.getElementById('video-quality-select');
+      const filenameInput = document.getElementById('video-filename-input');
+      const folderInput = document.getElementById('video-folder-input');
+
+      const selectedOpt = qualitySelect ? qualitySelect.selectedOptions[0] : null;
+      const downloadUrl = (selectedOpt && selectedOpt.value) ? selectedOpt.value : (currentVideoAnalysis ? currentVideoAnalysis.bestUrl : '');
+      const quality = (selectedOpt && selectedOpt.getAttribute('data-quality')) ? selectedOpt.getAttribute('data-quality') : 'Default';
+      const filename = filenameInput ? filenameInput.value.trim() : 'video.mp4';
+      const saveDir = folderInput ? folderInput.value.trim() : '';
+
+      if (!downloadUrl) {
+        showToast('Please analyze a video stream first', 'warning');
+        return;
+      }
+
+      try {
+        btnStartVideo.disabled = true;
+        const resp = await fetch('/api/video/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: downloadUrl,
+            filename: filename,
+            saveDir: saveDir,
+            quality: quality
+          })
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(errText || 'Failed to start video download');
+        }
+
+        closeModal('modal-video-downloader');
+        showToast(`Started video capture: ${filename}`, 'success');
+        setTimeout(fetchDownloads, 200);
+      } catch (err) {
+        showToast(`Video capture error: ${err.message}`, 'error');
+      } finally {
+        btnStartVideo.disabled = false;
+      }
     });
   }
 

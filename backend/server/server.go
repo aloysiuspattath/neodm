@@ -18,12 +18,13 @@ import (
 
 // Server coordinates the HTTP REST API, WebSocket telemetry, and static frontend.
 type Server struct {
-	engine   *engine.Engine
-	store    *engine.Store
-	grabber  *grabber.SiteGrabber
-	hub      *Hub
-	frontend fs.FS
-	addr     string
+	engine        *engine.Engine
+	store         *engine.Store
+	grabber       *grabber.SiteGrabber
+	videoAnalyzer *grabber.VideoAnalyzer
+	hub           *Hub
+	frontend      fs.FS
+	addr          string
 }
 
 // NewServer creates a new API and UI server.
@@ -32,12 +33,13 @@ func NewServer(eng *engine.Engine, store *engine.Store, frontendFS fs.FS, addr s
 	go hub.Run()
 
 	s := &Server{
-		engine:   eng,
-		store:    store,
-		grabber:  grabber.NewSiteGrabber(),
-		hub:      hub,
-		frontend: frontendFS,
-		addr:     addr,
+		engine:        eng,
+		store:         store,
+		grabber:       grabber.NewSiteGrabber(),
+		videoAnalyzer: grabber.NewVideoAnalyzer(),
+		hub:           hub,
+		frontend:      frontendFS,
+		addr:          addr,
 	}
 
 	eng.OnTaskUpdate(func(t *engine.Task) {
@@ -85,6 +87,8 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/queue/move_task", s.cors(s.handleMoveQueueTask))
 	mux.HandleFunc("/api/grabber/crawl", s.cors(s.handleGrabberCrawl))
 	mux.HandleFunc("/api/grabber/batch", s.cors(s.handleGrabberBatch))
+	mux.HandleFunc("/api/video/analyze", s.cors(s.handleVideoAnalyze))
+	mux.HandleFunc("/api/video/download", s.cors(s.handleVideoDownload))
 	mux.HandleFunc("/api/settings", s.cors(s.handleSettings))
 	mux.HandleFunc("/api/open", s.cors(s.handleOpenFileOrFolder))
 	mux.HandleFunc("/api/select_folder", s.cors(s.handleSelectFolder))
@@ -596,6 +600,79 @@ func (s *Server) handleGrabberBatch(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"count":   len(urls),
+	})
+}
+
+type VideoAnalyzeReq struct {
+	URL string `json:"url"`
+}
+
+type VideoDownloadReq struct {
+	URL      string `json:"url"`
+	Filename string `json:"filename"`
+	SaveDir  string `json:"saveDir"`
+	Quality  string `json:"quality"`
+}
+
+func (s *Server) handleVideoAnalyze(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req VideoAnalyzeReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	analyzer := s.videoAnalyzer
+	if analyzer == nil {
+		analyzer = grabber.NewVideoAnalyzer()
+	}
+	info, err := analyzer.Analyze(r.Context(), req.URL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(info)
+}
+
+func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req VideoDownloadReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		return
+	}
+
+	saveDir := req.SaveDir
+	if saveDir == "" {
+		if s.store.Settings != nil && s.store.Settings.CategoryFolders != nil {
+			saveDir = s.store.Settings.CategoryFolders["Videos"]
+		}
+		if saveDir == "" && s.store.Settings != nil {
+			saveDir = s.store.Settings.DefaultDownloadDir
+		}
+	}
+
+	task, err := s.engine.AddTask(req.URL, req.Filename, saveDir, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	task.Category = "Videos"
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"taskId":  task.ID,
+		"message": "Video download started",
 	})
 }
 

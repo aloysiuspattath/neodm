@@ -46,13 +46,21 @@
     <div class="titlebar-right">
       <!-- Bento Segmented Theme Switcher -->
       <div class="bento-theme-switch" id="bento-theme-switch" role="radiogroup" aria-label="Theme mode">
-        <button class="theme-pill-btn active" data-theme="dark" id="theme-btn-dark" title="Switch to Bento Dark">
+        <button class="theme-pill-btn active" data-theme="dark" id="theme-btn-dark" title="Bento Dark (Graphite Slate)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
           <span>Dark</span>
         </button>
-        <button class="theme-pill-btn" data-theme="light" id="theme-btn-light" title="Switch to Bento Light">
+        <button class="theme-pill-btn" data-theme="light" id="theme-btn-light" title="Bento Light (Clean Cloud Slate)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
           <span>Light</span>
+        </button>
+        <button class="theme-pill-btn" data-theme="midnight" id="theme-btn-midnight" title="Midnight Obsidian (OLED Black)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a7 7 0 1 0 7 7"></path></svg>
+          <span>OLED</span>
+        </button>
+        <button class="theme-pill-btn" data-theme="emerald" id="theme-btn-emerald" title="Forest Emerald (Slate Pine)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+          <span>Emerald</span>
         </button>
       </div>
 
@@ -62,6 +70,8 @@
         <select id="theme-selector" class="theme-dropdown">
           <option value="dark" selected>Bento Dark</option>
           <option value="light">Bento Light</option>
+          <option value="midnight">Midnight Obsidian</option>
+          <option value="emerald">Forest Emerald</option>
         </select>
       </div>
 
@@ -739,93 +749,78 @@
     <div class="modal-card modal-lg">
       <div class="modal-header">
         <div class="modal-title-wrap">
-          <h2>🎥 Video Downloader</h2>
-          <span class="modal-subtitle">Download videos and audio in high definition</span>
+          <h2>🎬 Video & Media Downloader</h2>
+          <span class="modal-subtitle">Analyze and capture high-definition streams from YouTube, Vimeo, HTML5 & direct links</span>
         </div>
         <button class="modal-close" onclick="closeModal('modal-video-downloader')">✕</button>
       </div>
 
-      <!-- Video Downloader Tabs -->
-      <div class="modal-nav-tabs">
-        <button class="modal-tab-btn active" data-vtab="vtab-single">Single Video</button>
-        <button class="modal-tab-btn" data-vtab="vtab-playlist">Playlist / Channel</button>
-      </div>
-
       <div class="modal-body">
         <div class="input-with-button">
-          <input type="text" id="video-url-input" placeholder="https://www.youtube.com/watch?v=xxxxxxxxx" value="https://www.youtube.com/watch?v=xxxxxxxxx">
-          <button class="btn btn-modal-download" id="btn-analyze-video" type="button">Analyze</button>
+          <input type="text" id="video-url-input" placeholder="Paste video URL (YouTube, Vimeo, MP4, WebM, MKV...)" value="">
+          <button class="btn btn-secondary" id="btn-paste-video-url" type="button" title="Paste from clipboard">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>Paste</span>
+          </button>
+          <button class="btn btn-modal-download" id="btn-analyze-video" type="button">
+            <span id="btn-analyze-text">Analyze</span>
+          </button>
         </div>
 
-        <div class="video-preview-card" id="video-preview-card" style="display: flex;">
+        <!-- Analyzer Loading Indicator -->
+        <div id="video-analyze-spinner" style="display: none; align-items: center; justify-content: center; gap: 10px; padding: 24px; color: var(--text-muted); font-size: 13px;">
+          <div class="spinner-ring" style="width: 20px; height: 20px; border: 2.5px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+          <span>Probing media stream and fetching video metadata...</span>
+        </div>
+
+        <!-- Dynamic Video Preview Card -->
+        <div class="video-preview-card" id="video-preview-card" style="display: none;">
           <div class="video-thumbnail-wrap">
-            <div class="video-thumb-img">
-              <svg width="100%" height="100%" viewBox="0 0 160 90" fill="none">
-                <rect width="160" height="90" rx="6" fill="#0f172a"/>
-                <ellipse cx="80" cy="45" rx="50" ry="30" fill="#1e293b"/>
-                <path d="M50 45C50 30 65 20 80 20C95 20 110 30 110 45C110 55 95 65 80 65C65 65 50 55 50 45Z" fill="#fbbf24" opacity="0.6"/>
-                <circle cx="80" cy="45" r="14" fill="#f59e0b"/>
-                <path d="M40 80L80 30L120 80" stroke="#0284c7" stroke-width="3" stroke-linecap="round"/>
+            <img id="video-thumb-img-element" class="video-thumb-img" src="" alt="Thumbnail" style="display: none; object-fit: cover; width: 100%; height: 100%;">
+            <div id="video-thumb-placeholder" class="video-thumb-img" style="display: flex; align-items: center; justify-content: center; background: var(--bg-card); color: var(--text-dim); width: 100%; height: 100%;">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
               </svg>
             </div>
-            <span class="video-duration-badge" id="video-duration-display">2:32</span>
+            <span class="video-duration-badge" id="video-duration-display">Stream</span>
           </div>
           <div class="video-info-wrap">
-            <h4 class="video-preview-title" id="video-title-display">Interstellar - Official Trailer</h4>
+            <h4 class="video-preview-title" id="video-title-display">Video Title</h4>
             <div class="video-meta-tags">
-              <span class="video-meta-sub">Paramount Pictures</span>
-              <span class="video-tag tag-yt">YouTube</span>
-              <span class="video-tag tag-res">4K - 2160p</span>
+              <span class="video-meta-sub" id="video-author-display">Source</span>
+              <span class="video-tag tag-yt" id="video-platform-display">Direct</span>
             </div>
           </div>
         </div>
 
-        <div class="video-options-wrap">
+        <!-- Video Stream Format & Save Options -->
+        <div class="video-options-wrap" id="video-options-wrap" style="display: none;">
           <div class="form-row video-opt-row">
-            <label class="props-label">Video</label>
+            <label class="props-label">Available Stream</label>
             <select id="video-quality-select" class="theme-dropdown" style="flex: 2;">
-              <option value="2160p">4K (2160p)</option>
-              <option value="1080p">1080p Full HD</option>
-              <option value="720p">720p HD</option>
+              <!-- Populated dynamically -->
             </select>
-            <select class="theme-dropdown" style="flex: 1;">
-              <option value="mp4">MP4</option>
-              <option value="mkv">MKV</option>
-              <option value="webm">WEBM</option>
-            </select>
-            <span class="props-size-hint">~ 1.2 GB</span>
           </div>
 
           <div class="form-row video-opt-row">
-            <label class="props-label">Audio</label>
-            <select class="theme-dropdown" style="flex: 2;">
-              <option value="320">MP3 (320 kbps)</option>
-              <option value="256">AAC (256 kbps)</option>
-              <option value="flac">FLAC Lossless</option>
-            </select>
-            <span class="props-size-hint" style="flex: 1; text-align: right;">~ 56 MB</span>
+            <label class="props-label">Filename</label>
+            <input type="text" id="video-filename-input" class="props-input" style="flex: 2;" placeholder="video.mp4">
           </div>
 
           <div class="form-row video-opt-row">
-            <div class="checkbox-row custom-checkbox-row" style="margin: 0; min-width: 100px;">
-              <input type="checkbox" id="video-subtitles-check">
-              <label for="video-subtitles-check">Subtitles</label>
-            </div>
-            <select class="theme-dropdown" style="flex: 1;">
-              <option value="en">English (srt)</option>
-              <option value="es">Spanish (srt)</option>
-            </select>
-          </div>
-
-          <div class="checkbox-row custom-checkbox-row" style="margin-top: 6px;">
-            <input type="checkbox" id="video-thumb-check" checked>
-            <label for="video-thumb-check">Download thumbnail</label>
+            <label class="props-label">Save Folder</label>
+            <input type="text" id="video-folder-input" class="props-input" style="flex: 2;" readonly>
+            <button class="btn btn-secondary" id="btn-browse-video-folder" type="button">Browse...</button>
           </div>
         </div>
       </div>
       <div class="modal-footer add-download-footer">
         <button class="btn btn-modal-cancel" onclick="closeModal('modal-video-downloader')">Cancel</button>
-        <button class="btn btn-modal-download" id="btn-start-video-download">Download</button>
+        <button class="btn btn-modal-download" id="btn-start-video-download" disabled>Start Download</button>
       </div>
     </div>
   </div>
@@ -1256,9 +1251,11 @@
             <h3>Themes & Appearance</h3>
             <div class="form-group">
               <label>Visual Theme:</label>
-              <select id="setting-theme-picker">
-                <option value="dark">🌙 Bento Dark (Modern Slate & Glow)</option>
-                <option value="light">☀️ Bento Light (Clean Neumorphic Card)</option>
+              <select id="setting-theme-picker" class="theme-dropdown">
+                <option value="dark">🌙 Bento Dark (Graphite Slate)</option>
+                <option value="light">☀️ Bento Light (Clean Cloud Slate & Crisp Cards)</option>
+                <option value="midnight">🌌 Midnight Obsidian (Deep OLED Black)</option>
+                <option value="emerald">🌲 Forest Emerald (Sophisticated Slate Green)</option>
               </select>
             </div>
             <div class="checkbox-row" style="margin-top: 16px;">
