@@ -68,6 +68,10 @@ const (
 	SC_DRAGMOVE      = 0xF012 // SC_MOVE | 2 initiates native window drag on any window style
 	WM_NCLBUTTONDOWN = 0x00A1
 	HTCAPTION        = 2
+
+	WM_SETICON = 0x0080
+	ICON_SMALL = 0
+	ICON_BIG   = 1
 )
 
 // RegisterAppHWND sets the active window handle for IFD.
@@ -110,6 +114,17 @@ func SetupFramelessWindow(hwnd uintptr) {
 	newStyle := style &^ WS_CAPTION
 	procSetWindowLong.Call(hwnd, uintptr(GWL_STYLE), newStyle)
 	procSetWindowPos.Call(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED)
+
+	// Set explicit application icon on the window for taskbar, Alt+Tab, and titlebar
+	hInstance, _, _ := procGetModuleHandle.Call(0)
+	hIcon, _, _ := procLoadIcon.Call(hInstance, uintptr(1))
+	if hIcon == 0 || hIcon == 1 {
+		hIcon, _, _ = procLoadIcon.Call(0, uintptr(IDI_APPLICATION))
+	}
+	if hIcon != 0 && hIcon != 1 {
+		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_SMALL), hIcon)
+		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_BIG), hIcon)
+	}
 }
 
 // PerformWindowAction handles window minimize, maximize/restore, close, and drag.
