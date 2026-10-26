@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -96,7 +97,20 @@ func TestAnalyzeYouTube(t *testing.T) {
 	if len(info.Formats) == 0 {
 		t.Errorf("Expected formats for YouTube video, got 0")
 	}
-	if info.Filename == "" || info.Filename == ".mp4" || info.Filename == "-.mp4" {
+	if info.Filename == "" || info.Filename == ".mp4" || info.Filename == "-.mp4" || info.Filename == "- YouTube.mp4" {
 		t.Errorf("Invalid filename generated: %q", info.Filename)
 	}
+
+	for _, f := range info.Formats {
+		if strings.Contains(f.Quality, "1080p") || strings.Contains(f.Quality, "720p") {
+			if f.Format != "MP4" {
+				t.Errorf("Expected MP4 for %s, got %s", f.Quality, f.Format)
+			}
+		}
+	}
+}
+
+func TestFindFFmpegPath(t *testing.T) {
+	// Should run safely without panic
+	_ = FindFFmpegPath()
 }

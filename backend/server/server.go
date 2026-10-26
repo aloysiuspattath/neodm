@@ -198,10 +198,13 @@ func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 		if s.videoAnalyzer != nil {
 			if vInfo, vErr := s.videoAnalyzer.Analyze(r.Context(), req.URL); vErr == nil && vInfo.BestURL != "" {
 				downloadURL = vInfo.BestURL
-				if downloadFilename == "" || strings.HasPrefix(downloadFilename, "-") {
+				if downloadFilename == "" || downloadFilename == "watch" || downloadFilename == "video" || downloadFilename == "- YouTube" || strings.HasPrefix(downloadFilename, "-") {
 					downloadFilename = vInfo.Filename
 				}
 			}
+		}
+		if downloadFilename == "" || downloadFilename == "watch" || downloadFilename == "video" || downloadFilename == "- YouTube" || strings.HasPrefix(downloadFilename, "-") {
+			downloadFilename = "YouTube_Video.mp4"
 		}
 	}
 
@@ -671,6 +674,21 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 
 	downloadURL := strings.TrimSpace(req.URL)
 	downloadFilename := strings.TrimSpace(req.Filename)
+
+	isAudio := strings.HasPrefix(strings.ToLower(req.Quality), "audio") || strings.Contains(strings.ToLower(req.Quality), "audio only")
+	if isAudio {
+		if strings.HasSuffix(strings.ToLower(downloadFilename), ".mp4") {
+			downloadFilename = strings.TrimSuffix(downloadFilename, ".mp4") + ".mp3"
+		} else if !strings.HasSuffix(strings.ToLower(downloadFilename), ".mp3") {
+			downloadFilename = downloadFilename + ".mp3"
+		}
+	} else {
+		if strings.HasSuffix(strings.ToLower(downloadFilename), ".mp3") {
+			downloadFilename = strings.TrimSuffix(downloadFilename, ".mp3") + ".mp4"
+		} else if !strings.HasSuffix(strings.ToLower(downloadFilename), ".mp4") && !strings.HasSuffix(strings.ToLower(downloadFilename), ".mkv") {
+			downloadFilename = downloadFilename + ".mp4"
+		}
+	}
 
 	saveDir := req.SaveDir
 	if saveDir == "" {

@@ -41,11 +41,11 @@ type VideoInfo struct {
 }
 
 var (
-	ytRegex      = regexp.MustCompile(`(?:youtube\.com\/(?:watch\?.*v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})`)
-	vimeoRegex   = regexp.MustCompile(`vimeo\.com\/(?:video\/)?(\d+)`)
-	ogTitleRegex = regexp.MustCompile(`(?i)<meta\s+(?:property|name)=["'](?:og:title|twitter:title)["']\s+content=["']([^"']+)["']`)
-	ogThumbRegex = regexp.MustCompile(`(?i)<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']`)
-	ogVideoRegex = regexp.MustCompile(`(?i)<meta\s+(?:property|name)=["'](?:og:video(?::secure_url|:url)?|twitter:player:stream)["']\s+content=["']([^"']+)["']`)
+	ytRegex       = regexp.MustCompile(`(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})`)
+	vimeoRegex    = regexp.MustCompile(`vimeo\.com\/(?:video\/)?(\d+)`)
+	ogTitleRegex  = regexp.MustCompile(`(?i)<meta\s+(?:property|name)=["'](?:og:title|twitter:title)["']\s+content=["']([^"']+)["']`)
+	ogThumbRegex  = regexp.MustCompile(`(?i)<meta\s+(?:property|name)=["'](?:og:image|twitter:image)["']\s+content=["']([^"']+)["']`)
+	ogVideoRegex  = regexp.MustCompile(`(?i)<meta\s+(?:property|name)=["'](?:og:video(?::secure_url|:url)?|twitter:player:stream)["']\s+content=["']([^"']+)["']`)
 	titleTagRegex = regexp.MustCompile(`(?i)<title>(.*?)</title>`)
 	sourceSrcRegex = regexp.MustCompile(`(?i)<(?:source|video)\s+[^>]*src=["']([^"']+)["']`)
 )
@@ -98,9 +98,18 @@ func (va *VideoAnalyzer) Analyze(ctx context.Context, rawURL string) (*VideoInfo
 		return va.analyzeDirectVideo(parsed)
 	}
 
-	// 2. YouTube Detection
-	if ytMatches := ytRegex.FindStringSubmatch(trimmed); len(ytMatches) > 1 {
-		return va.analyzeYouTube(trimmed, ytMatches[1])
+	// 2. YouTube Detection (matches watch, shorts, live, embed, youtu.be, or query param)
+	if strings.Contains(parsed.Host, "youtube.com") || strings.Contains(parsed.Host, "youtu.be") {
+		videoID := ""
+		if ytMatches := ytRegex.FindStringSubmatch(trimmed); len(ytMatches) > 1 {
+			videoID = ytMatches[1]
+		} else if q := parsed.Query().Get("v"); q != "" {
+			videoID = q
+		}
+		if videoID == "" {
+			videoID = "video"
+		}
+		return va.analyzeYouTube(trimmed, videoID)
 	}
 
 	// 3. Vimeo Detection
@@ -108,8 +117,21 @@ func (va *VideoAnalyzer) Analyze(ctx context.Context, rawURL string) (*VideoInfo
 		return va.analyzeVimeo(trimmed, vimeoMatches[1])
 	}
 
-	// 4. General HTML5 Webpage Video Extraction
-	return va.analyzeHTML5Page(trimmed, parsed)
+	// 4. Try HTML5 Webpage Video Extraction first
+	info, err := va.analyzeHTML5Page(trimmed, parsed)
+	if err == nil && info != nil && info.BestURL != "" && info.BestURL != trimmed {
+		return info, nil
+	}
+
+	// 5. Try yt-dlp for dynamic stream platforms (Twitter, TikTok, Instagram, Reddit, Twitch, etc.)
+	if ytInfo, ytErr := va.analyzeWithYtDlp(ctx, trimmed, parsed); ytErr == nil && ytInfo != nil {
+		return ytInfo, nil
+	}
+
+	if info != nil {
+		return info, nil
+	}
+	return nil, err
 }
 
 func (va *VideoAnalyzer) analyzeDirectVideo(parsed *url.URL) (*VideoInfo, error) {
@@ -176,7 +198,65 @@ func SilentCommand(name string, args ...string) *exec.Cmd {
 
 // IsYouTubeURL checks if the provided string is a YouTube page or short URL
 func IsYouTubeURL(rawURL string) bool {
-	return strings.Contains(rawURL, "youtube.com/") || strings.Contains(rawURL, "youtu.be/")
+	return strings.Contains(rawURL, "youtube.com") || strings.Contains(rawURL, "youtu.be")
+}
+
+// FindFFmpegPath locates the ffmpeg executable on the system, WinGet, or local paths.
+func FindFFmpegPath() string {
+	if p, err := exec.LookPath("ffmpeg"); err == nil {
+		return p
+	}
+	if p, err := exec.LookPath("ffmpeg.exe"); err == nil {
+		return p
+	}
+	appData := os.Getenv("APPDATA")
+	if appData != "" {
+		p := filepath.Join(appData, "NeoDM", "bin", "ffmpeg.exe")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	for _, candidate := range []string{"ffmpeg.exe", filepath.Join("bin", "ffmpeg.exe")} {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	// Check WinGet Packages
+	localAppData := os.Getenv("LOCALAPPDATA")
+	if localAppData != "" {
+		wingetDir := filepath.Join(localAppData, "Microsoft", "WinGet", "Packages")
+		if entries, err := os.ReadDir(wingetDir); err == nil {
+			for _, entry := range entries {
+				if strings.Contains(strings.ToLower(entry.Name()), "ffmpeg") {
+					var found string
+					_ = filepath.Walk(filepath.Join(wingetDir, entry.Name()), func(path string, info os.FileInfo, err error) error {
+						if err == nil && !info.IsDir() && strings.EqualFold(info.Name(), "ffmpeg.exe") {
+							found = path
+							return filepath.SkipAll
+						}
+						return nil
+					})
+					if found != "" {
+						return found
+					}
+				}
+			}
+		}
+	}
+	// Check standard directories
+	for _, dir := range []string{os.Getenv("ProgramFiles"), os.Getenv("ProgramFiles(x86)"), "C:\\ffmpeg", "C:\\bin"} {
+		if dir != "" {
+			cand := filepath.Join(dir, "ffmpeg", "bin", "ffmpeg.exe")
+			if _, err := os.Stat(cand); err == nil {
+				return cand
+			}
+			cand2 := filepath.Join(dir, "ffmpeg.exe")
+			if _, err := os.Stat(cand2); err == nil {
+				return cand2
+			}
+		}
+	}
+	return ""
 }
 
 // GetYtDlpPath locates the yt-dlp executable on the system or in NeoDM app data.
@@ -238,13 +318,93 @@ func EnsureYtDlp() (string, error) {
 	return dest, nil
 }
 
+func (va *VideoAnalyzer) analyzeWithYtDlp(ctx context.Context, pageURL string, parsed *url.URL) (*VideoInfo, error) {
+	ytdlp := GetYtDlpPath()
+	if ytdlp == "" {
+		return nil, fmt.Errorf("yt-dlp not available")
+	}
+
+	subCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(subCtx, ytdlp, "-j", "--no-playlist", "--no-warnings", "--socket-timeout", "5", pageURL)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	out, err := cmd.Output()
+	if err != nil || len(out) == 0 {
+		return nil, fmt.Errorf("yt-dlp probe failed")
+	}
+
+	var ytData struct {
+		Title     string `json:"title"`
+		Uploader  string `json:"uploader"`
+		Duration  string `json:"duration_string"`
+		Thumbnail string `json:"thumbnail"`
+	}
+	if err := json.Unmarshal(out, &ytData); err != nil || ytData.Title == "" {
+		return nil, fmt.Errorf("failed to parse yt-dlp metadata")
+	}
+
+	title := ytData.Title
+	author := ytData.Uploader
+	if author == "" {
+		author = parsed.Host
+	}
+	duration := ytData.Duration
+	if duration == "" {
+		duration = "Web Video"
+	}
+
+	cleanFilename := sanitizeVideoTitle(title)
+	if cleanFilename == "" {
+		cleanFilename = "web_video"
+	}
+	cleanFilename += ".mp4"
+
+	formats := []VideoFormat{
+		{
+			Quality:    "Best Video + Audio (Highest Quality)",
+			Resolution: "Auto HD",
+			Format:     "MP4",
+			SizeText:   "Best Quality",
+			URL:        pageURL,
+		},
+		{
+			Quality:    "Standard Video (720p / 1080p)",
+			Resolution: "1280x720",
+			Format:     "MP4",
+			SizeText:   "Standard",
+			URL:        pageURL,
+		},
+		{
+			Quality:    "Audio Only (High Quality MP3)",
+			Resolution: "Audio",
+			Format:     "MP3",
+			SizeText:   "Audio Track",
+			URL:        pageURL,
+		},
+	}
+
+	return &VideoInfo{
+		URL:       pageURL,
+		Title:     title,
+		Author:    author,
+		Duration:  duration,
+		Thumbnail: ytData.Thumbnail,
+		Platform:  parsed.Host,
+		BestURL:   pageURL,
+		Filename:  cleanFilename,
+		Formats:   formats,
+	}, nil
+}
+
 func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, error) {
 	title := "YouTube Video"
 	author := "YouTube Creator"
 	duration := "HD Video"
 	thumb := fmt.Sprintf("https://img.youtube.com/vi/%s/maxresdefault.jpg", videoID)
 
-	// 1. Fetch metadata via fast public oEmbed
+	// 1. Fetch metadata via fast public oEmbed (< 200ms)
 	oembedURL := fmt.Sprintf("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=%s&format=json", videoID)
 	req, err := http.NewRequest("GET", oembedURL, nil)
 	if err == nil {
@@ -277,12 +437,12 @@ func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, er
 		}()
 	}
 
-	var formats []VideoFormat
-	bestURL := ""
-
 	if ytdlp != "" {
-		// Run yt-dlp -j silently to extract complete video metadata with zero console windows
-		cmd := SilentCommand(ytdlp, "-j", "--no-warnings", pageURL)
+		// Run yt-dlp -j silently with 5s timeout to extract extra details if available
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, ytdlp, "-j", "--no-playlist", "--no-warnings", "--socket-timeout", "4", pageURL)
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		if out, err := cmd.Output(); err == nil {
 			var ytData struct {
 				Title     string `json:"title"`
@@ -305,73 +465,52 @@ func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, er
 				}
 			}
 		}
+	}
 
-		// Provide crystal-clear presets with full video + audio muxing
-		formats = []VideoFormat{
-			{
-				Quality:    "1080p (Full HD - Video + Audio)",
-				Resolution: "1920x1080",
-				Format:     "MP4",
-				SizeText:   "Best Quality",
-				URL:        pageURL,
-			},
-			{
-				Quality:    "720p (High Definition - Video + Audio)",
-				Resolution: "1280x720",
-				Format:     "MP4",
-				SizeText:   "Standard HD",
-				URL:        pageURL,
-			},
-			{
-				Quality:    "480p (Standard Definition)",
-				Resolution: "854x480",
-				Format:     "MP4",
-				SizeText:   "Balanced",
-				URL:        pageURL,
-			},
-			{
-				Quality:    "360p (Fast Download)",
-				Resolution: "640x360",
-				Format:     "MP4",
-				SizeText:   "Small Size",
-				URL:        pageURL,
-			},
-			{
-				Quality:    "Audio Only (High Quality MP3 / M4A)",
-				Resolution: "Audio",
-				Format:     "MP3",
-				SizeText:   "Audio Track",
-				URL:        pageURL,
-			},
-		}
-		bestURL = pageURL
+	// Always provide full clear presets with video + audio muxing
+	formats := []VideoFormat{
+		{
+			Quality:    "1080p (Full HD Video + Audio)",
+			Resolution: "1920x1080",
+			Format:     "MP4",
+			SizeText:   "Best Quality",
+			URL:        pageURL,
+		},
+		{
+			Quality:    "720p (High Definition Video + Audio)",
+			Resolution: "1280x720",
+			Format:     "MP4",
+			SizeText:   "Standard HD",
+			URL:        pageURL,
+		},
+		{
+			Quality:    "480p (Standard Definition Video + Audio)",
+			Resolution: "854x480",
+			Format:     "MP4",
+			SizeText:   "Balanced",
+			URL:        pageURL,
+		},
+		{
+			Quality:    "360p (Fast Download Video + Audio)",
+			Resolution: "640x360",
+			Format:     "MP4",
+			SizeText:   "Small Size",
+			URL:        pageURL,
+		},
+		{
+			Quality:    "Audio Only (High Quality MP3)",
+			Resolution: "Audio",
+			Format:     "MP3",
+			SizeText:   "Audio Track",
+			URL:        pageURL,
+		},
 	}
 
 	cleanFilename := sanitizeVideoTitle(title)
-	if cleanFilename == "" || cleanFilename == "-" {
+	if cleanFilename == "" || cleanFilename == "-" || cleanFilename == "YouTube" || cleanFilename == "- YouTube" {
 		cleanFilename = fmt.Sprintf("YouTube_Video_%s", videoID)
 	}
 	cleanFilename += ".mp4"
-
-	if len(formats) == 0 {
-		formats = []VideoFormat{
-			{
-				Quality:    "720p (High Definition)",
-				Resolution: "1280x720",
-				Format:     "MP4",
-				SizeText:   "~25 MB",
-				URL:        pageURL,
-			},
-			{
-				Quality:    "360p (Medium)",
-				Resolution: "640x360",
-				Format:     "MP4",
-				SizeText:   "~8 MB",
-				URL:        pageURL,
-			},
-		}
-		bestURL = pageURL
-	}
 
 	info := &VideoInfo{
 		URL:       pageURL,
@@ -380,7 +519,7 @@ func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, er
 		Duration:  duration,
 		Thumbnail: thumb,
 		Platform:  "YouTube",
-		BestURL:   bestURL,
+		BestURL:   pageURL,
 		Filename:  cleanFilename,
 		Formats:   formats,
 	}
@@ -451,13 +590,50 @@ func (va *VideoAnalyzer) analyzeVimeo(pageURL, videoID string) (*VideoInfo, erro
 func (va *VideoAnalyzer) analyzeHTML5Page(pageURL string, parsed *url.URL) (*VideoInfo, error) {
 	req, err := http.NewRequest("GET", pageURL, nil)
 	if err != nil {
-		return nil, err
+		fallbackTitle := parsed.Host + " Video"
+		return &VideoInfo{
+			URL:       pageURL,
+			Title:     fallbackTitle,
+			Author:    parsed.Host,
+			Duration:  "Stream",
+			Thumbnail: "",
+			Platform:  parsed.Host,
+			BestURL:   pageURL,
+			Filename:  sanitizeVideoTitle(fallbackTitle) + ".mp4",
+			Formats: []VideoFormat{
+				{
+					Quality:  "Direct Media Stream (Auto)",
+					Format:   "MP4",
+					SizeText: "Direct",
+					URL:      pageURL,
+				},
+			},
+		}, nil
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 NeoDM/1.0")
 
 	resp, err := va.getClient().Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch page: %w", err)
+		// Provide clean fallback so the user is never blocked with "failed to fetch"
+		fallbackTitle := parsed.Host + " Video"
+		return &VideoInfo{
+			URL:       pageURL,
+			Title:     fallbackTitle,
+			Author:    parsed.Host,
+			Duration:  "Stream",
+			Thumbnail: "",
+			Platform:  parsed.Host,
+			BestURL:   pageURL,
+			Filename:  sanitizeVideoTitle(fallbackTitle) + ".mp4",
+			Formats: []VideoFormat{
+				{
+					Quality:  "Direct Media Stream (Auto)",
+					Format:   "MP4",
+					SizeText: "Direct",
+					URL:      pageURL,
+				},
+			},
+		}, nil
 	}
 	defer resp.Body.Close()
 
@@ -532,6 +708,9 @@ func sanitizeVideoTitle(title string) string {
 	clean = strings.TrimSuffix(clean, " - YouTube")
 	clean = strings.TrimSuffix(clean, "- YouTube")
 	clean = strings.TrimSuffix(clean, " - YouTube.mp4")
+	clean = strings.TrimSuffix(clean, "- YouTube.mp4")
+	clean = strings.TrimSuffix(clean, ".mp4")
+	clean = strings.TrimSuffix(clean, ".mp3")
 	clean = strings.TrimPrefix(clean, "- ")
 	clean = strings.TrimPrefix(clean, "-")
 	clean = strings.TrimSpace(clean)

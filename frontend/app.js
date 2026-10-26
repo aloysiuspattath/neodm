@@ -2249,7 +2249,7 @@ function initModals() {
               try {
                 const p = new URL(extracted).pathname;
                 const base = p.substring(p.lastIndexOf('/') + 1);
-                if (base) nameInput.value = decodeURIComponent(base);
+                if (base && base !== 'watch') nameInput.value = decodeURIComponent(base);
               } catch (_) {}
             }
           }
@@ -2486,6 +2486,26 @@ function initModals() {
             opt.selected = true;
             qualitySelect.appendChild(opt);
           }
+
+          // Dynamically toggle filename extension (.mp4 vs .mp3) when stream format changes
+          qualitySelect.onchange = () => {
+            const opt = qualitySelect.selectedOptions[0];
+            if (!opt) return;
+            const qual = (opt.getAttribute('data-quality') || '').toLowerCase();
+            const fmt = (opt.getAttribute('data-format') || '').toLowerCase();
+            const fnInput = document.getElementById('video-filename-input');
+            if (fnInput && fnInput.value) {
+              let cur = fnInput.value.trim();
+              if (qual.startsWith('audio') || fmt === 'mp3') {
+                cur = cur.replace(/\.(mp4|mkv|webm|avi|flv)$/i, '') + '.mp3';
+                if (!cur.toLowerCase().endsWith('.mp3')) cur += '.mp3';
+              } else {
+                cur = cur.replace(/\.(mp3|m4a|wav|aac)$/i, '') + '.mp4';
+                if (!cur.toLowerCase().endsWith('.mp4')) cur += '.mp4';
+              }
+              fnInput.value = cur;
+            }
+          };
         }
 
         if (previewCard) previewCard.style.display = 'flex';
@@ -2513,8 +2533,18 @@ function initModals() {
       const selectedOpt = qualitySelect ? qualitySelect.selectedOptions[0] : null;
       const downloadUrl = (selectedOpt && selectedOpt.value) ? selectedOpt.value : (currentVideoAnalysis ? currentVideoAnalysis.bestUrl : '');
       const quality = (selectedOpt && selectedOpt.getAttribute('data-quality')) ? selectedOpt.getAttribute('data-quality') : 'Default';
-      const filename = filenameInput ? filenameInput.value.trim() : 'video.mp4';
+      let filename = filenameInput ? filenameInput.value.trim() : 'video.mp4';
       const saveDir = folderInput ? folderInput.value.trim() : '';
+
+      // Guarantee pristine file extension based on selected format
+      const isAudio = quality.toLowerCase().startsWith('audio') || (selectedOpt && selectedOpt.getAttribute('data-format') === 'MP3');
+      if (isAudio) {
+        filename = filename.replace(/\.(mp4|mkv|webm|avi|flv)$/i, '') + '.mp3';
+        if (!filename.toLowerCase().endsWith('.mp3')) filename += '.mp3';
+      } else {
+        filename = filename.replace(/\.(mp3|m4a|wav|aac)$/i, '') + '.mp4';
+        if (!filename.toLowerCase().endsWith('.mp4')) filename += '.mp4';
+      }
 
       if (!downloadUrl) {
         showToast('Please analyze a video stream first', 'warning');

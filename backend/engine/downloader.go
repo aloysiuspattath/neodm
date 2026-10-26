@@ -624,13 +624,27 @@ func (t *Task) startYouTubeDownload() {
 	baseFilename := strings.TrimSuffix(strings.TrimSuffix(t.Filename, ".mp4"), ".mp3")
 	baseFilename = strings.TrimPrefix(strings.TrimPrefix(baseFilename, "- "), "-")
 	baseFilename = strings.TrimSpace(baseFilename)
-	if baseFilename == "" || baseFilename == "video" || baseFilename == "YouTube_Video" {
+	if baseFilename == "" || baseFilename == "video" || baseFilename == "YouTube_Video" || baseFilename == "watch" || baseFilename == "YouTube" || baseFilename == "- YouTube" || baseFilename == "downloaded_video" || strings.HasPrefix(baseFilename, "-") {
 		baseFilename = "%(title)s"
 	}
 
-	isAudioOnly := strings.Contains(strings.ToLower(t.StreamQuality), "audio") ||
-		strings.HasSuffix(strings.ToLower(t.Filename), ".mp3") ||
-		strings.HasSuffix(strings.ToLower(t.Filename), ".m4a")
+	sq := strings.ToLower(t.StreamQuality)
+	fn := strings.ToLower(t.Filename)
+
+	isExplicitVideo := strings.Contains(sq, "1080") ||
+		strings.Contains(sq, "720") ||
+		strings.Contains(sq, "480") ||
+		strings.Contains(sq, "360") ||
+		strings.Contains(sq, "video") ||
+		strings.HasSuffix(fn, ".mp4") ||
+		strings.HasSuffix(fn, ".mkv") ||
+		strings.HasSuffix(fn, ".webm")
+
+	isAudioOnly := !isExplicitVideo && (strings.HasPrefix(sq, "audio") ||
+		strings.Contains(sq, "audio only") ||
+		sq == "audio" ||
+		strings.HasSuffix(fn, ".mp3") ||
+		strings.HasSuffix(fn, ".m4a"))
 
 	var args []string
 	outTemplate := filepath.Join(saveDir, baseFilename+".%(ext)s")
@@ -641,18 +655,23 @@ func (t *Task) startYouTubeDownload() {
 			"-x",
 			"--audio-format", "mp3",
 			"--audio-quality", "0",
+			"--no-playlist",
+			"--windows-filenames",
 			"--no-warnings",
 			"--newline",
 			"--progress-template", "download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
 			"-o", outTemplate,
-			t.URL,
 		}
+		if ffmpegPath := grabber.FindFFmpegPath(); ffmpegPath != "" {
+			args = append(args, "--ffmpeg-location", filepath.Dir(ffmpegPath))
+		}
+		args = append(args, t.URL)
 	} else {
-		formatArg := "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
+		formatArg := "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
 		if strings.Contains(t.StreamQuality, "720") {
-			formatArg = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
+			formatArg = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best"
 		} else if strings.Contains(t.StreamQuality, "480") {
-			formatArg = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
+			formatArg = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best"
 		} else if strings.Contains(t.StreamQuality, "360") {
 			formatArg = "18/best[height<=360]/best"
 		}
@@ -660,12 +679,17 @@ func (t *Task) startYouTubeDownload() {
 		args = []string{
 			"-f", formatArg,
 			"--merge-output-format", "mp4",
+			"--no-playlist",
+			"--windows-filenames",
 			"--no-warnings",
 			"--newline",
 			"--progress-template", "download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
 			"-o", outTemplate,
-			t.URL,
 		}
+		if ffmpegPath := grabber.FindFFmpegPath(); ffmpegPath != "" {
+			args = append(args, "--ffmpeg-location", filepath.Dir(ffmpegPath))
+		}
+		args = append(args, t.URL)
 	}
 
 	cmd := exec.CommandContext(t.ctx, ytdlp, args...)
@@ -715,13 +739,17 @@ func (t *Task) startYouTubeDownload() {
 				t.mu.Unlock()
 				t.engine.updateTask(t)
 			}
-		} else if strings.Contains(line, "Destination:") || strings.Contains(line, "Merging formats into") {
-			re := regexp.MustCompile(`["'](.*?)["']`)
-			m := re.FindStringSubmatch(line)
-			if len(m) > 1 {
-				finalCreatedFile = m[1]
-			} else if strings.Contains(line, "Destination:") {
-				finalCreatedFile = strings.TrimSpace(strings.TrimPrefix(line, "[download] Destination:"))
+		} else if strings.Contains(line, "Merging formats into") {
+			dest := strings.TrimSpace(strings.TrimPrefix(line, "[Merger] Merging formats into"))
+			dest = strings.Trim(dest, `"'`)
+			if dest != "" {
+				finalCreatedFile = dest
+			}
+		} else if strings.Contains(line, "Destination:") {
+			dest := strings.TrimSpace(strings.TrimPrefix(line, "[download] Destination:"))
+			dest = strings.Trim(dest, `"'`)
+			if finalCreatedFile == "" || (!strings.HasSuffix(finalCreatedFile, ".mp4") && !strings.HasSuffix(finalCreatedFile, ".mp3")) {
+				finalCreatedFile = dest
 			}
 		}
 		if strings.Contains(line, "ERROR:") || strings.Contains(line, "error:") {
@@ -762,14 +790,33 @@ func (t *Task) startYouTubeDownload() {
 		} else if isFile(candMp3) {
 			targetFile = candMp3
 		} else {
+			// Scan saveDir for newest matching file
 			if entries, err := os.ReadDir(saveDir); err == nil {
+				var newestFile string
+				var newestMod time.Time
 				for _, entry := range entries {
-					if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".mp4") || strings.HasSuffix(entry.Name(), ".mp3")) {
-						if baseFilename != "%(title)s" && strings.Contains(entry.Name(), baseFilename) {
-							targetFile = filepath.Join(saveDir, entry.Name())
-							break
+					if entry.IsDir() {
+						continue
+					}
+					name := strings.ToLower(entry.Name())
+					if isAudioOnly {
+						if !strings.HasSuffix(name, ".mp3") && !strings.HasSuffix(name, ".m4a") {
+							continue
+						}
+					} else {
+						if !strings.HasSuffix(name, ".mp4") && !strings.HasSuffix(name, ".mkv") && !strings.HasSuffix(name, ".webm") {
+							continue
 						}
 					}
+					if info, err := entry.Info(); err == nil {
+						if info.ModTime().After(newestMod) && time.Since(info.ModTime()) < 10*time.Minute {
+							newestMod = info.ModTime()
+							newestFile = filepath.Join(saveDir, entry.Name())
+						}
+					}
+				}
+				if newestFile != "" {
+					targetFile = newestFile
 				}
 			}
 		}

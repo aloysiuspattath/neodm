@@ -528,6 +528,47 @@ func TestVideoEndpoints(t *testing.T) {
 	if !found {
 		t.Errorf("Expected video task with Category Videos in engine")
 	}
+
+	// Test Video vs Audio extension enforcement
+	// Case 1: Video selected with .mp3 input -> auto-corrected to .mp4
+	vidPayload, _ := json.Marshal(VideoDownloadReq{
+		URL:      "https://example.com/movie.mp4",
+		Filename: "movie.mp3",
+		Quality:  "1080p (Full HD Video + Audio)",
+	})
+	reqVid := httptest.NewRequest("POST", "/api/video/download", bytes.NewReader(vidPayload))
+	recVid := httptest.NewRecorder()
+	srv.handleVideoDownload(recVid, reqVid)
+	if recVid.Code != http.StatusOK {
+		t.Fatalf("handleVideoDownload failed: %s", recVid.Body.String())
+	}
+
+	// Case 2: Audio selected with .mp4 input -> auto-corrected to .mp3
+	audPayload, _ := json.Marshal(VideoDownloadReq{
+		URL:      "https://example.com/audio.mp4",
+		Filename: "song.mp4",
+		Quality:  "Audio Only (High Quality MP3)",
+	})
+	reqAud := httptest.NewRequest("POST", "/api/video/download", bytes.NewReader(audPayload))
+	recAud := httptest.NewRecorder()
+	srv.handleVideoDownload(recAud, reqAud)
+	if recAud.Code != http.StatusOK {
+		t.Fatalf("handleVideoDownload failed: %s", recAud.Body.String())
+	}
+
+	allTasks := eng.GetAllTasks()
+	for _, tk := range allTasks {
+		if strings.Contains(tk.URL, "movie.mp4") {
+			if !strings.HasSuffix(tk.Filename, ".mp4") {
+				t.Errorf("Expected .mp4 filename for 1080p video, got %s", tk.Filename)
+			}
+		}
+		if strings.Contains(tk.URL, "audio.mp4") {
+			if !strings.HasSuffix(tk.Filename, ".mp3") {
+				t.Errorf("Expected .mp3 filename for Audio Only, got %s", tk.Filename)
+			}
+		}
+	}
 }
 
 func TestSystemDrivesAPI(t *testing.T) {
