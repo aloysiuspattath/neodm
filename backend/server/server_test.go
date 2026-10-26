@@ -3,11 +3,14 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"ifd/backend/engine"
 )
@@ -18,7 +21,7 @@ func setupTestServer(t *testing.T) (*Server, *engine.Engine, string) {
 		t.Fatal(err)
 	}
 
-	store, err := engine.NewStore()
+	store, err := engine.NewStoreWithPath(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -360,5 +363,80 @@ func TestClipboardAPI(t *testing.T) {
 	}
 	if success, ok := res["success"].(bool); !ok || !success {
 		t.Fatalf("Expected success true, got %v", res["success"])
+	}
+}
+
+// TestAddDownloadImmediateDataTransfer verifies that adding a download starts data transfer immediately.
+func TestAddDownloadImmediateDataTransfer(t *testing.T) {
+	testPayload := []byte("Accelerated download data packet stream verification for IFD/NeoDM")
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testPayload)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(testPayload)
+	}))
+	defer httpServer.Close()
+
+	tmpDir, err := os.MkdirTemp("", "ifd_add_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := engine.NewStoreWithPath(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.Settings.DefaultDownloadDir = tmpDir
+	store.Settings.MaxConcurrentDownloads = 4
+
+	eng := engine.NewEngine(store)
+	srv := NewServer(eng, store, nil, "127.0.0.1:0")
+
+	completed := make(chan struct{})
+	eng.OnTaskComplete(func(t *engine.Task) {
+		select {
+		case <-completed:
+		default:
+			close(completed)
+		}
+	})
+
+	payload := AddDownloadReq{
+		URL:      httpServer.URL + "/testdata.bin",
+		Filename: "testdata.bin",
+		SaveDir:  tmpDir,
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest("POST", "/api/download/add", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.handleAddDownload(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleAddDownload failed with %d: %s", rec.Code, rec.Body.String())
+	}
+
+	select {
+	case <-completed:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Download did not complete in time")
+	}
+
+	tasks := eng.GetAllTasks()
+	if len(tasks) == 0 {
+		t.Fatalf("Expected at least 1 task")
+	}
+	task := tasks[0]
+	if task.Status != "Completed" {
+		t.Errorf("Expected status Completed, got %s", task.Status)
+	}
+
+	savedFile := filepath.Join(tmpDir, "testdata.bin")
+	content, err := os.ReadFile(savedFile)
+	if err != nil {
+		t.Fatalf("Failed to read file on disk: %v", err)
+	}
+	if !bytes.Equal(content, testPayload) {
+		t.Errorf("File content mismatch: expected %q, got %q", string(testPayload), string(content))
 	}
 }

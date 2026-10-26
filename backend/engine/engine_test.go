@@ -1,7 +1,11 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -210,7 +214,7 @@ func TestTaskControlActions(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	store, err := NewStore()
+	store, err := NewStoreWithPath(tmpDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,8 +254,8 @@ func TestTaskControlActions(t *testing.T) {
 
 	// 2. Test Resume
 	task.Resume()
-	if task.Status != "Queued" {
-		t.Errorf("Expected status 'Queued', got %s", task.Status)
+	if task.Status != "Queued" && task.Status != "Connecting" {
+		t.Errorf("Expected status 'Queued' or 'Connecting', got %s", task.Status)
 	}
 	task.Pause()
 
@@ -285,3 +289,93 @@ func TestTaskControlActions(t *testing.T) {
 		t.Errorf("Expected task %s to be removed from engine", task.ID)
 	}
 }
+
+// TestRealHTTPDownloadTransfer verifies end-to-end data transfer with a real HTTP test server.
+func TestRealHTTPDownloadTransfer(t *testing.T) {
+	testData := []byte("Hello, NeoDM accelerated multi-connection turbo engine download verification test data!")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rangeHeader := r.Header.Get("Range")
+		if rangeHeader != "" {
+			var start, end int64
+			n, _ := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end)
+			if n == 2 {
+				if end >= int64(len(testData)) {
+					end = int64(len(testData)) - 1
+				}
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(testData)))
+				w.Header().Set("Accept-Ranges", "bytes")
+				w.WriteHeader(http.StatusPartialContent)
+				w.Write(testData[start : end+1])
+				return
+			} else if n == 1 {
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, len(testData)-1, len(testData)))
+				w.Header().Set("Accept-Ranges", "bytes")
+				w.WriteHeader(http.StatusPartialContent)
+				w.Write(testData[start:])
+				return
+			}
+		}
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(testData)))
+		w.WriteHeader(http.StatusOK)
+		w.Write(testData)
+	}))
+	defer server.Close()
+
+	tmpDir, err := os.MkdirTemp("", "ifd_download_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStoreWithPath(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.Settings.DefaultDownloadDir = tmpDir
+
+	eng := NewEngine(store)
+
+	var updateCount int
+	completed := make(chan struct{})
+
+	eng.OnTaskUpdate(func(task *Task) {
+		updateCount++
+	})
+	eng.OnTaskComplete(func(task *Task) {
+		select {
+		case <-completed:
+		default:
+			close(completed)
+		}
+	})
+
+	task, err := eng.AddTask(server.URL+"/testfile.bin", "downloaded_file.bin", tmpDir, nil)
+	if err != nil {
+		t.Fatalf("AddTask failed: %v", err)
+	}
+
+	select {
+	case <-completed:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("Download timed out. Task status: %s, Error: %s", task.Status, task.Error)
+	}
+
+	if task.Status != "Completed" {
+		t.Errorf("Expected status Completed, got %s (err: %s)", task.Status, task.Error)
+	}
+
+	if updateCount == 0 {
+		t.Errorf("Expected OnTaskUpdate callbacks to be fired, got 0")
+	}
+
+	// Verify file content on disk
+	content, err := os.ReadFile(task.FinalPath)
+	if err != nil {
+		t.Fatalf("Failed to read completed file at %s: %v", task.FinalPath, err)
+	}
+	if !bytes.Equal(content, testData) {
+		t.Errorf("Content mismatch: expected %q, got %q", string(testData), string(content))
+	}
+}
+

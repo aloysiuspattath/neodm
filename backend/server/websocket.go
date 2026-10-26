@@ -29,10 +29,12 @@ type Hub struct {
 
 // WSMessage represents a real-time event sent to the frontend.
 type WSMessage struct {
-	Type        string                 `json:"type"` // "telemetry", "task_update", "clipboard_url", "completed"
-	Payload     interface{}            `json:"payload"`
-	Timestamp   int64                  `json:"timestamp"`
-	GlobalSpeed int64                  `json:"globalSpeed"`
+	Type        string      `json:"type"` // "telemetry", "task_added", "task_updated", "task_completed", "task_deleted", "clipboard_url"
+	Payload     interface{} `json:"payload"`
+	Data        interface{} `json:"data"`
+	Timestamp   int64       `json:"timestamp"`
+	GlobalSpeed int64       `json:"globalSpeed"`
+	TotalSpeed  int64       `json:"totalSpeed"`
 }
 
 // NewHub creates a new WebSocket hub.
@@ -87,18 +89,29 @@ func (h *Hub) Run() {
 func (h *Hub) broadcastTelemetry() {
 	tasks := h.engine.GetAllTasks()
 	var globalSpeed int64 = 0
+	activeCount := 0
 
 	for _, t := range tasks {
 		if t.Status == "Downloading" {
 			globalSpeed += t.Speed
+			activeCount++
 		}
+	}
+
+	telemetryData := map[string]interface{}{
+		"tasks":           tasks,
+		"totalSpeed":      globalSpeed,
+		"globalSpeed":     globalSpeed,
+		"activeDownloads": activeCount,
 	}
 
 	msg := WSMessage{
 		Type:        "telemetry",
 		Payload:     tasks,
+		Data:        telemetryData,
 		Timestamp:   time.Now().UnixMilli(),
 		GlobalSpeed: globalSpeed,
+		TotalSpeed:  globalSpeed,
 	}
 
 	data, err := json.Marshal(msg)
@@ -125,9 +138,12 @@ func (h *Hub) BroadcastEvent(eventType string, payload interface{}) {
 		return
 	}
 	msg := WSMessage{
-		Type:      eventType,
-		Payload:   payload,
-		Timestamp: time.Now().UnixMilli(),
+		Type:        eventType,
+		Payload:     payload,
+		Data:        payload,
+		Timestamp:   time.Now().UnixMilli(),
+		GlobalSpeed: 0,
+		TotalSpeed:  0,
 	}
 	if data, err := json.Marshal(msg); err == nil {
 		h.Broadcast(data)

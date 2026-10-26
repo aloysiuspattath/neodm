@@ -92,7 +92,7 @@
         <!-- Categories Section -->
         <div class="sidebar-section">
           <ul class="nav-list" id="category-nav-list">
-            <li class="nav-item" data-category="all">
+            <li class="nav-item active" data-category="all">
               <span class="nav-icon">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="4" y1="6" x2="20" y2="6"></line>
@@ -104,9 +104,9 @@
                 </svg>
               </span>
               <span class="nav-label">All Downloads</span>
-              <span class="badge" id="count-all">12</span>
+              <span class="badge badge-active-pill" id="count-all">12</span>
             </li>
-            <li class="nav-item active" data-filter="downloading">
+            <li class="nav-item" data-filter="downloading">
               <span class="nav-icon">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="7 10 12 15 17 10"></polyline>
@@ -115,7 +115,7 @@
                 </svg>
               </span>
               <span class="nav-label">Downloading</span>
-              <span class="badge badge-active-pill" id="count-downloading">3</span>
+              <span class="badge" id="count-downloading">3</span>
             </li>
             <li class="nav-item" data-filter="completed">
               <span class="nav-icon">
@@ -483,8 +483,8 @@
         <div class="bottom-telemetry-dock-wrap">
           <div class="bottom-telemetry-card">
             <div class="telemetry-speed-block">
-              <span class="telemetry-label">Total Speed</span>
-              <span class="telemetry-speed-val" id="telemetry-speed-val">36.9 MB/s</span>
+              <span class="telemetry-label" id="bottom-telemetry-label">Total Speed</span>
+              <span class="telemetry-speed-val" id="telemetry-speed-val">0 B/s</span>
             </div>
 
             <div class="telemetry-chart-block">
@@ -494,15 +494,15 @@
             <div class="telemetry-metrics-block">
               <div class="telemetry-metric-col">
                 <span class="metric-label">Active</span>
-                <span class="metric-val" id="telemetry-active-count">3</span>
+                <span class="metric-val" id="telemetry-active-count">0</span>
               </div>
               <div class="telemetry-metric-col">
                 <span class="metric-label">Queued</span>
-                <span class="metric-val" id="telemetry-queued-count">1</span>
+                <span class="metric-val" id="telemetry-queued-count">0</span>
               </div>
               <div class="telemetry-metric-col">
                 <span class="metric-label">Completed (Today)</span>
-                <span class="metric-val" id="telemetry-completed-count">5</span>
+                <span class="metric-val" id="telemetry-completed-count">0</span>
               </div>
             </div>
           </div>

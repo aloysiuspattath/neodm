@@ -53,14 +53,14 @@ type Task struct {
 
 // Engine manages the collection of download tasks, queueing, and bandwidth allocation.
 type Engine struct {
-	mu             sync.RWMutex
-	tasks          map[string]*Task
-	store          *Store
-	limiter        *RateLimiter
-	client         *http.Client
-	QueueMgr       *QueueManager
-	onTaskUpdate   func(t *Task)
-	onTaskComplete func(t *Task)
+	mu                sync.RWMutex
+	tasks             map[string]*Task
+	store             *Store
+	limiter           *RateLimiter
+	client            *http.Client
+	QueueMgr          *QueueManager
+	updateCallbacks   []func(t *Task)
+	completeCallbacks []func(t *Task)
 }
 
 // NewEngine creates a new Download Engine instance.
@@ -90,6 +90,10 @@ func NewEngine(store *Store) *Engine {
 
 	// Restore tasks from store
 	for _, rec := range store.Records {
+		// Reset any stale active statuses from a previous process termination
+		if rec.Status == "Downloading" || rec.Status == "Connecting" {
+			rec.Status = "Paused"
+		}
 		task := eng.taskFromRecord(rec)
 		eng.tasks[task.ID] = task
 		if eng.QueueMgr != nil {
@@ -102,8 +106,32 @@ func NewEngine(store *Store) *Engine {
 
 // SetCallbacks registers callbacks for UI updates and completion alerts.
 func (e *Engine) SetCallbacks(onUpdate func(t *Task), onComplete func(t *Task)) {
-	e.onTaskUpdate = onUpdate
-	e.onTaskComplete = onComplete
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if onUpdate != nil {
+		e.updateCallbacks = append(e.updateCallbacks, onUpdate)
+	}
+	if onComplete != nil {
+		e.completeCallbacks = append(e.completeCallbacks, onComplete)
+	}
+}
+
+// OnTaskUpdate registers an update listener callback.
+func (e *Engine) OnTaskUpdate(fn func(t *Task)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if fn != nil {
+		e.updateCallbacks = append(e.updateCallbacks, fn)
+	}
+}
+
+// OnTaskComplete registers a completion listener callback.
+func (e *Engine) OnTaskComplete(fn func(t *Task)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if fn != nil {
+		e.completeCallbacks = append(e.completeCallbacks, fn)
+	}
 }
 
 // SetGlobalSpeedLimit updates bandwidth throttle.
@@ -307,6 +335,11 @@ func (e *Engine) AddTaskWithQueue(rawURL string, customFilename string, customDi
 	e.saveTask(task)
 	e.checkQueue()
 
+	// Ensure task starts immediately if queued without getting blocked
+	if task.Status == "Queued" {
+		go task.Start()
+	}
+
 	return task, nil
 }
 
@@ -384,7 +417,7 @@ func (e *Engine) checkQueue() {
 // Start initiates the download process.
 func (t *Task) Start() {
 	t.mu.Lock()
-	if t.Status != "Queued" {
+	if t.Status != "Queued" && t.Status != "Paused" && t.Status != "Error" {
 		t.mu.Unlock()
 		return
 	}
@@ -490,8 +523,12 @@ func (t *Task) Start() {
 		t.mu.Unlock()
 
 		t.engine.updateTask(t)
-		if t.engine.onTaskComplete != nil {
-			t.engine.onTaskComplete(t)
+		t.engine.mu.RLock()
+		completeCbs := make([]func(t *Task), len(t.engine.completeCallbacks))
+		copy(completeCbs, t.engine.completeCallbacks)
+		t.engine.mu.RUnlock()
+		for _, cb := range completeCbs {
+			cb(t)
 		}
 		if t.engine.QueueMgr != nil {
 			t.engine.QueueMgr.CheckQueueProgression(t)
@@ -503,7 +540,7 @@ func (t *Task) Start() {
 
 // probeServer checks file size, range capability, and content disposition.
 func (t *Task) probeServer() error {
-	probeCtx, cancel := context.WithTimeout(t.ctx, 10*time.Second)
+	probeCtx, cancel := context.WithTimeout(t.ctx, 15*time.Second)
 	defer cancel()
 
 	// 1. Try HEAD request first (standard HTTP probe)
@@ -526,65 +563,76 @@ func (t *Task) probeServer() error {
 					t.SupportsRange = true
 				}
 				t.extractFilename(headResp.Header)
-				if t.TotalSize > 0 {
+				if t.TotalSize > 0 && t.SupportsRange {
 					return nil
 				}
 			}
 		}
 	}
 
-	// 2. Fallback to GET probe with Range: bytes=0-0
+	// 2. Fallback to GET probe with Range: bytes=0-0 to test range support and size accurately
 	req, err := http.NewRequestWithContext(probeCtx, "GET", t.URL, nil)
+	if err == nil {
+		for k, v := range t.Headers {
+			req.Header.Set(k, v)
+		}
+		if req.Header.Get("User-Agent") == "" {
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+		}
+		req.Header.Set("Range", "bytes=0-0")
+
+		resp, err := t.client.Do(req)
+		if err == nil {
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusPartialContent {
+				t.SupportsRange = true
+				contentRange := resp.Header.Get("Content-Range")
+				if contentRange != "" {
+					var start, end, total int64
+					if _, err := fmt.Sscanf(contentRange, "bytes %d-%d/%d", &start, &end, &total); err == nil {
+						t.TotalSize = total
+					}
+				}
+				t.extractFilename(resp.Header)
+				return nil
+			} else if resp.StatusCode == http.StatusOK {
+				// Server ignored Range header and returned full content
+				t.SupportsRange = strings.EqualFold(resp.Header.Get("Accept-Ranges"), "bytes")
+				if resp.ContentLength > 0 {
+					t.TotalSize = resp.ContentLength
+				}
+				t.extractFilename(resp.Header)
+				return nil
+			}
+		}
+	}
+
+	// 3. Fallback: plain GET request without Range header (handles servers returning 400/416 to Range)
+	plainReq, err := http.NewRequestWithContext(probeCtx, "GET", t.URL, nil)
 	if err != nil {
 		return err
 	}
-
 	for k, v := range t.Headers {
-		req.Header.Set(k, v)
+		plainReq.Header.Set(k, v)
 	}
-	if req.Header.Get("User-Agent") == "" {
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+	if plainReq.Header.Get("User-Agent") == "" {
+		plainReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
 	}
-
-	req.Header.Set("Range", "bytes=0-0")
-
-	resp, err := t.client.Do(req)
+	plainResp, err := t.client.Do(plainReq)
 	if err != nil {
-		// Retry without Range header
-		req2, err2 := http.NewRequestWithContext(probeCtx, "GET", t.URL, nil)
-		if err2 != nil {
-			return err
-		}
-		for k, v := range t.Headers {
-			req2.Header.Set(k, v)
-		}
-		resp2, err2 := t.client.Do(req2)
-		if err2 != nil {
-			return err2
-		}
-		defer resp2.Body.Close()
-		resp = resp2
-	} else {
-		defer resp.Body.Close()
+		return err
+	}
+	defer plainResp.Body.Close()
+
+	if plainResp.StatusCode < 200 || plainResp.StatusCode >= 300 {
+		return fmt.Errorf("server responded with status %d %s", plainResp.StatusCode, plainResp.Status)
 	}
 
-	if resp.StatusCode == http.StatusPartialContent {
-		t.SupportsRange = true
-		contentRange := resp.Header.Get("Content-Range")
-		if contentRange != "" {
-			var start, end, total int64
-			if _, err := fmt.Sscanf(contentRange, "bytes %d-%d/%d", &start, &end, &total); err == nil {
-				t.TotalSize = total
-			}
-		}
-	} else if resp.StatusCode == http.StatusOK {
-		t.SupportsRange = strings.EqualFold(resp.Header.Get("Accept-Ranges"), "bytes")
-		t.TotalSize = resp.ContentLength
-	} else {
-		return fmt.Errorf("server responded with status %d %s", resp.StatusCode, resp.Status)
+	t.SupportsRange = strings.EqualFold(plainResp.Header.Get("Accept-Ranges"), "bytes")
+	if plainResp.ContentLength > 0 {
+		t.TotalSize = plainResp.ContentLength
 	}
-
-	t.extractFilename(resp.Header)
+	t.extractFilename(plainResp.Header)
 	return nil
 }
 
@@ -596,19 +644,23 @@ func (t *Task) extractFilename(h http.Header) {
 				parts := strings.SplitN(fn, "''", 2)
 				if len(parts) == 2 {
 					if decoded, err := url.PathUnescape(parts[1]); err == nil {
-						t.Filename = decoded
+						t.Filename = SanitizeFilename(decoded)
 					}
 				}
 			} else if fn, ok := params["filename"]; ok {
-				t.Filename = fn
+				t.Filename = SanitizeFilename(fn)
 			}
 		}
 	}
 	t.Category = DetectCategory(t.Filename)
+	if t.SavePath != "" && t.Filename != "" {
+		t.SavePath = filepath.Join(filepath.Dir(t.SavePath), t.Filename)
+	}
 }
 
 // runWorker executes download for a single segment, with dynamic subdivision support.
 func (t *Task) runWorker(seg *Segment, wg *sync.WaitGroup) {
+	consecutiveErrors := 0
 	for {
 		if t.ctx.Err() != nil {
 			return
@@ -655,6 +707,11 @@ func (t *Task) runWorker(seg *Segment, wg *sync.WaitGroup) {
 				return
 			}
 			seg.Error = err.Error()
+			consecutiveErrors++
+			if consecutiveErrors > 5 {
+				t.fail(fmt.Errorf("download error: %w", err))
+				return
+			}
 			select {
 			case <-t.ctx.Done():
 				return
@@ -663,15 +720,43 @@ func (t *Task) runWorker(seg *Segment, wg *sync.WaitGroup) {
 			continue
 		}
 
+		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+			seg.Error = fmt.Sprintf("HTTP %d %s", resp.StatusCode, resp.Status)
+			resp.Body.Close()
+			t.fail(fmt.Errorf("server error: HTTP %d %s", resp.StatusCode, resp.Status))
+			return
+		}
+
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			seg.Error = fmt.Sprintf("HTTP %d %s", resp.StatusCode, resp.Status)
 			resp.Body.Close()
+			consecutiveErrors++
+			if consecutiveErrors > 5 {
+				t.fail(fmt.Errorf("download failed: HTTP %d %s", resp.StatusCode, resp.Status))
+				return
+			}
 			select {
 			case <-t.ctx.Done():
 				return
 			case <-time.After(1 * time.Second):
 			}
 			continue
+		}
+
+		consecutiveErrors = 0
+
+		if t.SupportsRange && resp.StatusCode == http.StatusOK {
+			// Server does not support Range requests despite Range header
+			t.mu.Lock()
+			t.SupportsRange = false
+			t.mu.Unlock()
+			if seg.ID != 0 {
+				resp.Body.Close()
+				seg.Done = true
+				seg.Active = false
+				return
+			}
+			seg.EndOffset = -1
 		}
 
 		if t.TotalSize <= 0 && resp.ContentLength > 0 {
@@ -697,6 +782,7 @@ func (t *Task) runWorker(seg *Segment, wg *sync.WaitGroup) {
 				if _, writeErr := t.storage.WriteAt(buf[:n], cur); writeErr != nil {
 					seg.Error = writeErr.Error()
 					resp.Body.Close()
+					t.fail(fmt.Errorf("storage write error: %w", writeErr))
 					return
 				}
 				atomic.AddInt64(&seg.CurrentOffset, int64(n))
@@ -786,15 +872,16 @@ func (t *Task) Pause() {
 // Resume resumes a paused download.
 func (t *Task) Resume() {
 	t.mu.Lock()
-	if t.Status != "Paused" && t.Status != "Error" {
+	if t.Status != "Paused" && t.Status != "Error" && t.Status != "Queued" {
 		t.mu.Unlock()
 		return
 	}
 	t.Status = "Queued"
+	t.Error = ""
 	t.mu.Unlock()
 
 	t.engine.updateTask(t)
-	t.engine.checkQueue()
+	go t.Start()
 }
 
 // Cancel cancels the download and optionally removes files.
@@ -861,7 +948,7 @@ func (t *Task) Restart() {
 	t.mu.Unlock()
 
 	t.engine.updateTask(t)
-	t.engine.checkQueue()
+	go t.Start()
 }
 
 // SetSpeedLimit dynamically updates task speed limit in bytes/sec (0 = unlimited).
@@ -984,8 +1071,12 @@ func (t *Task) ToRecord() *DownloadRecord {
 func (e *Engine) updateTask(t *Task) {
 	rec := t.ToRecord()
 	e.store.UpdateRecord(rec)
-	if e.onTaskUpdate != nil {
-		e.onTaskUpdate(t)
+	e.mu.RLock()
+	cbs := make([]func(t *Task), len(e.updateCallbacks))
+	copy(cbs, e.updateCallbacks)
+	e.mu.RUnlock()
+	for _, cb := range cbs {
+		cb(t)
 	}
 }
 

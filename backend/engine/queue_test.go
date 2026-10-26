@@ -12,7 +12,7 @@ func TestQueueLifecycle(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	store, err := NewStore()
+	store, err := NewStoreWithPath(tmpDir)
 	if err != nil {
 		t.Fatalf("failed to create store: %v", err)
 	}

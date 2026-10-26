@@ -31,7 +31,7 @@ func NewServer(eng *engine.Engine, store *engine.Store, frontendFS fs.FS, addr s
 	hub := NewHub(eng)
 	go hub.Run()
 
-	return &Server{
+	s := &Server{
 		engine:   eng,
 		store:    store,
 		grabber:  grabber.NewSiteGrabber(),
@@ -39,6 +39,15 @@ func NewServer(eng *engine.Engine, store *engine.Store, frontendFS fs.FS, addr s
 		frontend: frontendFS,
 		addr:     addr,
 	}
+
+	eng.OnTaskUpdate(func(t *engine.Task) {
+		hub.BroadcastEvent("task_updated", t.ToRecord())
+	})
+	eng.OnTaskComplete(func(t *engine.Task) {
+		hub.BroadcastEvent("task_completed", t.ToRecord())
+	})
+
+	return s
 }
 
 // Hub returns the server's WebSocket hub.

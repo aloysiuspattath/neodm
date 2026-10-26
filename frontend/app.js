@@ -476,6 +476,18 @@ async function batchAction(action, ids = null) {
 }
 
 // Sparklines & Telemetry Canvases
+const taskSpeedHistories = new Map();
+
+function recordTaskSpeed(taskId, speed) {
+  let hist = taskSpeedHistories.get(taskId);
+  if (!hist) {
+    hist = new Array(40).fill(0);
+    taskSpeedHistories.set(taskId, hist);
+  }
+  hist.push(speed);
+  hist.shift();
+}
+
 function initCanvases() {
   speedCanvas = document.getElementById('speed-canvas');
   if (speedCanvas) speedCtx = speedCanvas.getContext('2d');
@@ -483,14 +495,77 @@ function initCanvases() {
   bottomSpeedCanvas = document.getElementById('bottom-speed-canvas');
   if (bottomSpeedCanvas) bottomSpeedCtx = bottomSpeedCanvas.getContext('2d');
 
-  // Pre-seed bottomSpeedHistory with smooth spline waves matching the mockup
-  bottomSpeedHistory = [
-    10000000, 16000000, 27000000, 32000000, 22000000, 18000000, 26000000, 36000000,
-    30000000, 21000000, 32000000, 36900000, 38500000, 33000000, 25000000, 17000000,
-    22000000, 30000000, 24000000, 15000000
-  ];
-  if (bottomSpeedCtx && bottomSpeedCanvas) {
-    drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, bottomSpeedHistory, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
+  bottomSpeedHistory = new Array(40).fill(0);
+  updateTelemetryDock();
+}
+
+function updateTelemetryDock() {
+  const labelEl = document.getElementById('bottom-telemetry-label') || document.querySelector('.telemetry-speed-block .telemetry-label');
+  const speedValEl = document.getElementById('telemetry-speed-val');
+
+  if (selectedTaskIds.size === 0) {
+    // Default: Total Speed across all active downloads
+    if (labelEl) {
+      labelEl.textContent = 'Total Speed';
+      labelEl.title = 'Total download throughput across all active tasks';
+    }
+    const totalSpeed = downloads.reduce((acc, d) => acc + (d.status === 'Downloading' ? (d.speed || 0) : 0), 0);
+    if (speedValEl) speedValEl.textContent = formatSpeed(totalSpeed);
+
+    if (bottomSpeedCtx && bottomSpeedCanvas) {
+      drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, bottomSpeedHistory, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
+    }
+  } else if (selectedTaskIds.size === 1) {
+    // Single selected download
+    const selectedId = Array.from(selectedTaskIds)[0];
+    const task = downloads.find(d => d.id === selectedId);
+    if (labelEl) {
+      if (task && task.filename) {
+        const shortName = task.filename.length > 20 ? task.filename.substring(0, 18) + '…' : task.filename;
+        labelEl.textContent = `Speed (${shortName})`;
+        labelEl.title = `Speed of ${task.filename}`;
+      } else {
+        labelEl.textContent = 'Speed (Selected)';
+        labelEl.title = 'Speed of selected download';
+      }
+    }
+    const taskSpeed = task && task.status === 'Downloading' ? (task.speed || 0) : 0;
+    if (speedValEl) speedValEl.textContent = formatSpeed(taskSpeed);
+
+    let hist = taskSpeedHistories.get(selectedId);
+    if (!hist) {
+      hist = new Array(40).fill(taskSpeed);
+      taskSpeedHistories.set(selectedId, hist);
+    }
+    if (bottomSpeedCtx && bottomSpeedCanvas) {
+      drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, hist, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
+    }
+  } else {
+    // Multiple selected downloads
+    if (labelEl) {
+      labelEl.textContent = `Speed (${selectedTaskIds.size} Selected)`;
+      labelEl.title = `Combined speed of ${selectedTaskIds.size} selected downloads`;
+    }
+    let combinedSpeed = 0;
+    const combinedHist = new Array(40).fill(0);
+
+    selectedTaskIds.forEach(id => {
+      const task = downloads.find(d => d.id === id);
+      if (task && task.status === 'Downloading') {
+        combinedSpeed += (task.speed || 0);
+      }
+      const hist = taskSpeedHistories.get(id);
+      if (hist) {
+        for (let i = 0; i < 40; i++) {
+          combinedHist[i] += (hist[i] || 0);
+        }
+      }
+    });
+
+    if (speedValEl) speedValEl.textContent = formatSpeed(combinedSpeed);
+    if (bottomSpeedCtx && bottomSpeedCanvas) {
+      drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, combinedHist, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
+    }
   }
 }
 
@@ -507,9 +582,15 @@ function updateThroughputCharts(currentSpeed) {
   bottomSpeedHistory.push(currentSpeed);
   bottomSpeedHistory.shift();
 
-  if (bottomSpeedCtx && bottomSpeedCanvas) {
-    drawSplineArea(bottomSpeedCtx, bottomSpeedCanvas.width, bottomSpeedCanvas.height, bottomSpeedHistory, '#38bdf8', 'rgba(56, 189, 248, 0.28)');
+  // If a single task is selected, push its current speed to keep its sparkline moving smoothly
+  if (selectedTaskIds.size === 1) {
+    const selId = Array.from(selectedTaskIds)[0];
+    const task = downloads.find(d => d.id === selId);
+    const selSpeed = (task && task.status === 'Downloading') ? (task.speed || 0) : 0;
+    recordTaskSpeed(selId, selSpeed);
   }
+
+  updateTelemetryDock();
 }
 
 function drawSplineArea(ctx, width, height, data, strokeColor, fillColor) {
@@ -862,19 +943,72 @@ function updateEngineStatus(connected) {
 }
 
 function handleWebSocketMessage(msg) {
+  if (!msg) return;
+  const data = msg.data !== undefined ? msg.data : msg.payload;
+
   if (msg.type === 'telemetry') {
-    handleTelemetry(msg.data);
+    handleTelemetry(data || msg);
   } else if (msg.type === 'task_added') {
-    const existing = downloads.find(d => d.id === msg.data.id);
-    if (!existing) {
-      downloads.unshift(msg.data);
+    const task = data;
+    if (task && task.id) {
+      if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
+        downloads = [];
+      }
+      const existingIdx = downloads.findIndex(d => d.id === task.id);
+      if (existingIdx !== -1) {
+        downloads[existingIdx] = { ...downloads[existingIdx], ...task };
+      } else {
+        downloads.unshift(task);
+      }
+      localStorage.setItem('neodm-real-downloads-seen', 'true');
       renderDownloads();
+      updateCategoryBadges();
+      updateTelemetryDock();
+    }
+  } else if (msg.type === 'task_updated') {
+    const task = data;
+    if (task && task.id) {
+      if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
+        downloads = [];
+      }
+      const existingIdx = downloads.findIndex(d => d.id === task.id);
+      if (existingIdx !== -1) {
+        downloads[existingIdx] = { ...downloads[existingIdx], ...task };
+      } else {
+        downloads.push(task);
+      }
+      recordTaskSpeed(task.id, task.status === 'Downloading' ? (task.speed || 0) : 0);
+      updateLiveRowElements();
+      updateTelemetryDock();
+      if (activeInspectId === task.id) {
+        renderSegmentModalData(downloads[existingIdx !== -1 ? existingIdx : downloads.length - 1]);
+      }
+    }
+  } else if (msg.type === 'task_completed') {
+    const task = data;
+    if (task && task.id) {
+      const existingIdx = downloads.findIndex(d => d.id === task.id);
+      if (existingIdx !== -1) {
+        downloads[existingIdx] = { ...downloads[existingIdx], ...task, status: 'Completed', speed: 0, eta: 0 };
+      }
+      recordTaskSpeed(task.id, 0);
+      renderDownloads();
+      updateCategoryBadges();
+      updateTelemetryDock();
+      showToast(`Finished: ${task.filename || 'Download completed'}`, 'success');
     }
   } else if (msg.type === 'task_deleted') {
-    downloads = downloads.filter(d => d.id !== msg.data.id);
-    renderDownloads();
+    const delId = (data && data.id) || (typeof data === 'string' ? data : null);
+    if (delId) {
+      downloads = downloads.filter(d => d.id !== delId);
+      selectedTaskIds.delete(delId);
+      taskSpeedHistories.delete(delId);
+      renderDownloads();
+      updateCategoryBadges();
+      updateTelemetryDock();
+    }
   } else if (msg.type === 'clipboard_url') {
-    const raw = typeof msg.data === 'string' ? msg.data : (msg.data?.url || '');
+    const raw = typeof data === 'string' ? data : (data?.url || '');
     const url = extractUrlFromText(raw);
     if (url) {
       const quickInput = document.getElementById('quick-url-input');
@@ -900,12 +1034,15 @@ function handleWebSocketMessage(msg) {
 function handleTelemetry(data) {
   if (!data) return;
 
-  // Update tasks in local state
-  if (data.tasks && data.tasks.length > 0) {
+  // Extract tasks array safely whether payload is direct array or wrapped
+  const taskList = Array.isArray(data) ? data : (data.tasks || data.payload || data.downloads || []);
+
+  if (taskList.length > 0) {
     if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
       downloads = [];
     }
-    data.tasks.forEach(updated => {
+    taskList.forEach(updated => {
+      recordTaskSpeed(updated.id, updated.status === 'Downloading' ? (updated.speed || 0) : 0);
       const idx = downloads.findIndex(d => d.id === updated.id);
       if (idx !== -1) {
         downloads[idx] = { ...downloads[idx], ...updated };
@@ -913,18 +1050,27 @@ function handleTelemetry(data) {
         downloads.push(updated);
       }
     });
+    localStorage.setItem('neodm-real-downloads-seen', 'true');
   }
 
   // Calculate totals
-  const totalSpeed = data.totalSpeed || 0;
+  let totalSpeed = 0;
+  if (typeof data.totalSpeed === 'number') {
+    totalSpeed = data.totalSpeed;
+  } else if (typeof data.globalSpeed === 'number') {
+    totalSpeed = data.globalSpeed;
+  } else {
+    totalSpeed = downloads.reduce((acc, d) => acc + (d.status === 'Downloading' ? (d.speed || 0) : 0), 0);
+  }
+
   updateThroughputCharts(totalSpeed);
 
-  // Update Bottom Telemetry Bar
-  const speedVal = document.getElementById('telemetry-speed-val');
-  if (speedVal) speedVal.textContent = formatSpeed(totalSpeed);
-
+  // Update counts
   const activeCountEl = document.getElementById('telemetry-active-count');
-  if (activeCountEl) activeCountEl.textContent = data.activeDownloads || 0;
+  const activeCount = typeof data.activeDownloads === 'number'
+    ? data.activeDownloads
+    : downloads.filter(d => d.status === 'Downloading' || d.status === 'Connecting').length;
+  if (activeCountEl) activeCountEl.textContent = activeCount;
 
   const queuedCountEl = document.getElementById('telemetry-queued-count');
   const qCount = downloads.filter(d => d.status === 'Queued').length;
@@ -944,7 +1090,7 @@ function handleTelemetry(data) {
   }
 
   const bentoActive = document.getElementById('bento-active-count');
-  if (bentoActive) bentoActive.textContent = data.activeDownloads || 0;
+  if (bentoActive) bentoActive.textContent = activeCount;
 
   const bentoDone = document.getElementById('bento-completed-count');
   if (bentoDone) bentoDone.textContent = cCount;
@@ -1118,15 +1264,15 @@ async function loadInitialData() {
       const backendDownloads = dJson.downloads || [];
       if (backendDownloads.length > 0) {
         downloads = backendDownloads;
+        localStorage.setItem('neodm-real-downloads-seen', 'true');
+      } else if (localStorage.getItem('neodm-real-downloads-seen') === 'true') {
+        downloads = [];
       } else {
         downloads = [...SHOWCASE_DOWNLOADS];
       }
       renderDownloads();
       updateCategoryBadges();
-      const initialSpeed = downloads.reduce((acc, d) => acc + (d.speed || 0), 0);
-      if (initialSpeed > 0) {
-        updateThroughputCharts(initialSpeed);
-      }
+      updateTelemetryDock();
     }
 
     if (qRes.ok) {
@@ -1153,7 +1299,11 @@ function getFilteredDownloads() {
     }
     // Status filter
     if (currentStatusFilter !== 'all') {
-      if (d.status !== currentStatusFilter) return false;
+      if (currentStatusFilter === 'Downloading') {
+        if (d.status !== 'Downloading' && d.status !== 'Connecting' && d.status !== 'Queued') return false;
+      } else if (d.status !== currentStatusFilter) {
+        return false;
+      }
     }
     // Search query
     if (searchQuery) {
@@ -1358,12 +1508,22 @@ function attachRowEventListeners() {
     // Row selection on click
     row.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('input')) return;
-      if (selectedTaskIds.has(id)) {
-        selectedTaskIds.delete(id);
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedTaskIds.has(id)) {
+          selectedTaskIds.delete(id);
+        } else {
+          selectedTaskIds.add(id);
+        }
       } else {
-        selectedTaskIds.add(id);
+        if (selectedTaskIds.has(id) && selectedTaskIds.size === 1) {
+          selectedTaskIds.clear();
+        } else {
+          selectedTaskIds.clear();
+          selectedTaskIds.add(id);
+        }
       }
       renderDownloads();
+      updateTelemetryDock();
     });
 
     // Checkbox toggle
@@ -1371,6 +1531,7 @@ function attachRowEventListeners() {
       if (e.target.checked) selectedTaskIds.add(id);
       else selectedTaskIds.delete(id);
       renderDownloads();
+      updateTelemetryDock();
     });
 
     // Double click to open completed file or inspect segments
@@ -1420,9 +1581,19 @@ function attachGridEventListeners() {
 
     card.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('input')) return;
-      if (selectedTaskIds.has(id)) selectedTaskIds.delete(id);
-      else selectedTaskIds.add(id);
+      if (e.ctrlKey || e.metaKey) {
+        if (selectedTaskIds.has(id)) selectedTaskIds.delete(id);
+        else selectedTaskIds.add(id);
+      } else {
+        if (selectedTaskIds.has(id) && selectedTaskIds.size === 1) {
+          selectedTaskIds.clear();
+        } else {
+          selectedTaskIds.clear();
+          selectedTaskIds.add(id);
+        }
+      }
       renderDownloads();
+      updateTelemetryDock();
     });
 
     card.addEventListener('dblclick', (e) => {
@@ -1474,11 +1645,20 @@ function updateLiveRowElements() {
     // Update table row if present
     const row = document.querySelector(`tr[data-id="${d.id}"]`);
     if (row) {
+      const statusEl = row.querySelector('.status-text');
+      if (statusEl && statusEl.textContent !== d.status) {
+        statusEl.className = `status-text status-${d.status.toLowerCase()}`;
+        statusEl.textContent = d.status;
+      }
+
       const percentEl = row.querySelector('.row-percent');
       if (percentEl) percentEl.textContent = `${percent}%`;
 
       const fillEl = row.querySelector('.progress-fill');
-      if (fillEl) fillEl.style.width = `${percent}%`;
+      if (fillEl) {
+        fillEl.style.width = `${percent}%`;
+        fillEl.className = `progress-fill ${d.status.toLowerCase()}`;
+      }
 
       const speedEl = row.querySelector('.row-speed');
       if (speedEl) speedEl.textContent = speedText;
@@ -1494,7 +1674,10 @@ function updateLiveRowElements() {
     const card = document.querySelector(`.grid-card[data-id="${d.id}"]`);
     if (card) {
       const cardFill = card.querySelector('.progress-fill');
-      if (cardFill) cardFill.style.width = `${percent}%`;
+      if (cardFill) {
+        cardFill.style.width = `${percent}%`;
+        cardFill.className = `progress-fill ${d.status.toLowerCase()}`;
+      }
 
       const cardPercent = card.querySelector('.grid-card-percent');
       if (cardPercent) cardPercent.textContent = `${percent}%`;
@@ -1522,16 +1705,12 @@ function updateCategoryBadges() {
     document.getElementById('count-pictures') && (document.getElementById('count-pictures').textContent = '10');
     document.getElementById('count-other') && (document.getElementById('count-other').textContent = '5');
 
-    document.getElementById('telemetry-speed-val') && (document.getElementById('telemetry-speed-val').textContent = '36.9 MB/s');
-    document.getElementById('telemetry-active-count') && (document.getElementById('telemetry-active-count').textContent = '3');
-    document.getElementById('telemetry-queued-count') && (document.getElementById('telemetry-queued-count').textContent = '1');
-    document.getElementById('telemetry-completed-count') && (document.getElementById('telemetry-completed-count').textContent = '5');
     return;
   }
 
   const counts = {
     all: downloads.length,
-    downloading: downloads.filter(d => d.status === 'Downloading').length,
+    downloading: downloads.filter(d => d.status === 'Downloading' || d.status === 'Connecting' || d.status === 'Queued').length,
     completed: downloads.filter(d => d.status === 'Completed').length,
     Videos: downloads.filter(d => d.category === 'Videos').length,
     Music: downloads.filter(d => d.category === 'Music').length,

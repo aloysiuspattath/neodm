@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -112,16 +113,8 @@ type Store struct {
 	Records      map[string]*DownloadRecord
 }
 
-// NewStore initializes the data store at %APPDATA%\IFD or ./data
-func NewStore() (*Store, error) {
-	appData := os.Getenv("APPDATA")
-	var dataDir string
-	if appData != "" {
-		dataDir = filepath.Join(appData, "IFD")
-	} else {
-		dataDir = "./data"
-	}
-
+// NewStoreWithPath initializes the data store at a custom directory path (for testing or isolation).
+func NewStoreWithPath(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, err
 	}
@@ -138,9 +131,25 @@ func NewStore() (*Store, error) {
 	return s, nil
 }
 
+// NewStore initializes the data store at %APPDATA%\IFD or ./data
+func NewStore() (*Store, error) {
+	appData := os.Getenv("APPDATA")
+	var dataDir string
+	if appData != "" {
+		dataDir = filepath.Join(appData, "IFD")
+	} else {
+		dataDir = "./data"
+	}
+
+	return NewStoreWithPath(dataDir)
+}
+
 func (s *Store) load() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	homeDir, _ := os.UserHomeDir()
+	userDownloads := filepath.Join(homeDir, "Downloads")
 
 	// Load settings
 	if data, err := os.ReadFile(s.settingsPath); err == nil {
@@ -148,6 +157,17 @@ func (s *Store) load() {
 		if err := json.Unmarshal(data, &loadedSettings); err == nil {
 			s.Settings = &loadedSettings
 		}
+	}
+
+	// Safety sanitization: guarantee safe defaults for concurrency and download directory
+	if s.Settings.MaxConcurrentDownloads <= 0 {
+		s.Settings.MaxConcurrentDownloads = 4
+	}
+	if s.Settings.MaxConnectionsPerDownload <= 0 {
+		s.Settings.MaxConnectionsPerDownload = 8
+	}
+	if s.Settings.DefaultDownloadDir == "" || strings.Contains(s.Settings.DefaultDownloadDir, "Temp") {
+		s.Settings.DefaultDownloadDir = userDownloads
 	}
 
 	// Load records

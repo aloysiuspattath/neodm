@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 // Storage handles thread-safe random-access file writing directly to predetermined offsets.
@@ -100,11 +101,16 @@ func (s *Storage) Finalize() (string, error) {
 		counter++
 	}
 
-	if err := os.Rename(s.partPath, finalDest); err != nil {
-		return "", fmt.Errorf("failed to finalize download to %s: %w", finalDest, err)
+	var renameErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		renameErr = os.Rename(s.partPath, finalDest)
+		if renameErr == nil {
+			return finalDest, nil
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 
-	return finalDest, nil
+	return "", fmt.Errorf("failed to finalize download to %s: %w", finalDest, renameErr)
 }
 
 // RemovePartFile removes the unfinished .ifd_part file on download cancellation.
