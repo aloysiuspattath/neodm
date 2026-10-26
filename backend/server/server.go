@@ -669,20 +669,8 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	downloadURL := req.URL
-	downloadFilename := req.Filename
-
-	// If req.URL is still a page URL (e.g. youtube.com), resolve to real direct stream URL
-	if strings.Contains(req.URL, "youtube.com") || strings.Contains(req.URL, "youtu.be") {
-		if s.videoAnalyzer != nil {
-			if vInfo, vErr := s.videoAnalyzer.Analyze(r.Context(), req.URL); vErr == nil && vInfo.BestURL != "" {
-				downloadURL = vInfo.BestURL
-				if downloadFilename == "" || strings.HasPrefix(downloadFilename, "-") {
-					downloadFilename = vInfo.Filename
-				}
-			}
-		}
-	}
+	downloadURL := strings.TrimSpace(req.URL)
+	downloadFilename := strings.TrimSpace(req.Filename)
 
 	saveDir := req.SaveDir
 	if saveDir == "" {
@@ -694,14 +682,11 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	task, err := s.engine.AddTask(downloadURL, downloadFilename, saveDir, nil)
+	task, err := s.engine.AddTaskWithOptions(downloadURL, downloadFilename, saveDir, nil, "", "Videos", req.Quality)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	task.Category = "Videos"
-	task.StreamQuality = req.Quality
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{

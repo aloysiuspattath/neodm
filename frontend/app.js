@@ -920,21 +920,39 @@ function initContextMenu() {
     selectedCtxTask = downloads.find(d => d.id === taskId);
     if (!selectedCtxTask) return;
 
-    // Position menu safely inside window bounds
-    const menuWidth = 200;
-    const menuHeight = 320;
+    // Populate dynamic queue choices first so the height is accurately calculated
+    renderContextQueueList();
+
+    // Measure exact rendered geometry offscreen to avoid clipping
+    ctxMenu.style.visibility = 'hidden';
+    ctxMenu.style.display = 'block';
+
+    const menuRect = ctxMenu.getBoundingClientRect();
+    const menuWidth = menuRect.width || 215;
+    const menuHeight = menuRect.height || 470;
+
     let posX = e.clientX;
     let posY = e.clientY;
 
-    if (posX + menuWidth > window.innerWidth) posX = window.innerWidth - menuWidth - 10;
-    if (posY + menuHeight > window.innerHeight) posY = window.innerHeight - menuHeight - 10;
+    // Horizontal bounds check
+    if (posX + menuWidth > window.innerWidth - 12) {
+      posX = window.innerWidth - menuWidth - 12;
+    }
+    if (posX < 8) posX = 8;
 
-    ctxMenu.style.left = `${posX}px`;
-    ctxMenu.style.top = `${posY}px`;
-    ctxMenu.style.display = 'block';
+    // Vertical bounds check: if overflowing bottom of viewport, flip upwards or clamp safely
+    if (posY + menuHeight > window.innerHeight - 12) {
+      const flipY = e.clientY - menuHeight;
+      if (flipY >= 10) {
+        posY = flipY;
+      } else {
+        posY = Math.max(10, window.innerHeight - menuHeight - 12);
+      }
+    }
 
-    // Populate dynamic queue choices
-    renderContextQueueList();
+    ctxMenu.style.left = `${Math.round(posX)}px`;
+    ctxMenu.style.top = `${Math.round(posY)}px`;
+    ctxMenu.style.visibility = 'visible';
   });
 
   // Action listeners
@@ -985,6 +1003,41 @@ function initContextMenu() {
     el.addEventListener('click', () => {
       const conns = parseInt(el.getAttribute('data-conns'), 10);
       if (selectedCtxTask) setTaskConns(selectedCtxTask.id, conns);
+    });
+  });
+
+  // Handle intelligent submenu collision avoidance (flips up/left if near screen edges)
+  document.querySelectorAll('.ctx-has-sub').forEach(item => {
+    item.addEventListener('mouseenter', () => {
+      const sub = item.querySelector('.ctx-submenu');
+      if (sub) {
+        sub.style.display = 'block';
+        const subRect = sub.getBoundingClientRect();
+        if (subRect.bottom > window.innerHeight - 12) {
+          sub.style.top = 'auto';
+          sub.style.bottom = '-5px';
+        } else {
+          sub.style.top = '-5px';
+          sub.style.bottom = 'auto';
+        }
+        if (subRect.right > window.innerWidth - 12) {
+          sub.style.left = 'auto';
+          sub.style.right = '100%';
+        } else {
+          sub.style.left = '100%';
+          sub.style.right = 'auto';
+        }
+      }
+    });
+    item.addEventListener('mouseleave', () => {
+      const sub = item.querySelector('.ctx-submenu');
+      if (sub) {
+        sub.style.display = '';
+        sub.style.top = '';
+        sub.style.bottom = '';
+        sub.style.left = '';
+        sub.style.right = '';
+      }
     });
   });
 }

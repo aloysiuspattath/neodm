@@ -252,11 +252,16 @@ func SanitizeFilename(filename string) string {
 
 // AddTask creates a new download task in the default queue.
 func (e *Engine) AddTask(rawURL string, customFilename string, customDir string, headers map[string]string) (*Task, error) {
-	return e.AddTaskWithQueue(rawURL, customFilename, customDir, headers, "")
+	return e.AddTaskWithOptions(rawURL, customFilename, customDir, headers, "", "", "")
 }
 
 // AddTaskWithQueue creates a new download task assigned to a specific queue.
 func (e *Engine) AddTaskWithQueue(rawURL string, customFilename string, customDir string, headers map[string]string, queueID string) (*Task, error) {
+	return e.AddTaskWithOptions(rawURL, customFilename, customDir, headers, queueID, "", "")
+}
+
+// AddTaskWithOptions creates a new download task with explicit queue, category, and stream quality options.
+func (e *Engine) AddTaskWithOptions(rawURL string, customFilename string, customDir string, headers map[string]string, queueID, customCategory, streamQuality string) (*Task, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
@@ -273,6 +278,12 @@ func (e *Engine) AddTaskWithQueue(rawURL string, customFilename string, customDi
 	filename = SanitizeFilename(filename)
 
 	category := DetectCategory(filename)
+	if customCategory != "" {
+		category = customCategory
+	} else if strings.Contains(rawURL, "youtube.com") || strings.Contains(rawURL, "youtu.be") {
+		category = "Videos"
+	}
+
 	targetDir := customDir
 	if targetDir == "" {
 		if folder, exists := e.store.Settings.CategoryFolders[category]; exists && folder != "" {
@@ -317,20 +328,21 @@ func (e *Engine) AddTaskWithQueue(rawURL string, customFilename string, customDi
 
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	task := &Task{
-		ID:           id,
-		URL:          rawURL,
-		Filename:     filename,
-		SavePath:     targetFile,
-		Status:       "Queued",
-		Category:     category,
-		QueueID:      queueID,
-		Headers:      headers,
-		MaxConns:     e.store.Settings.MaxConnectionsPerDownload,
-		SpeedLimit:   0,
-		CreatedAt:    time.Now(),
-		engine:       e,
-		client:       e.client,
-		localLimiter: NewRateLimiter(0),
+		ID:            id,
+		URL:           rawURL,
+		Filename:      filename,
+		SavePath:      targetFile,
+		Status:        "Queued",
+		Category:      category,
+		QueueID:       queueID,
+		Headers:       headers,
+		MaxConns:      e.store.Settings.MaxConnectionsPerDownload,
+		SpeedLimit:    0,
+		StreamQuality: streamQuality,
+		CreatedAt:     time.Now(),
+		engine:        e,
+		client:        e.client,
+		localLimiter:  NewRateLimiter(0),
 	}
 
 	e.tasks[id] = task
@@ -591,7 +603,11 @@ func (t *Task) startYouTubeDownload() {
 	saveDir := filepath.Dir(t.SavePath)
 	if saveDir == "" || saveDir == "." {
 		if t.engine != nil && t.engine.store != nil && t.engine.store.Settings != nil {
-			saveDir = t.engine.store.Settings.DefaultDownloadDir
+			if folder, ok := t.engine.store.Settings.CategoryFolders["Videos"]; ok && folder != "" {
+				saveDir = folder
+			} else {
+				saveDir = t.engine.store.Settings.DefaultDownloadDir
+			}
 		}
 	}
 	if saveDir == "" {
@@ -604,9 +620,12 @@ func (t *Task) startYouTubeDownload() {
 	}
 	_ = os.MkdirAll(saveDir, 0755)
 
-	outTemplate := filepath.Join(saveDir, t.Filename)
-	if t.Filename == "" || strings.HasPrefix(t.Filename, "-") || strings.HasPrefix(t.Filename, "YouTube_Video_") {
-		outTemplate = filepath.Join(saveDir, "%(title)s.%(ext)s")
+	// Clean base filename without extension
+	baseFilename := strings.TrimSuffix(strings.TrimSuffix(t.Filename, ".mp4"), ".mp3")
+	baseFilename = strings.TrimPrefix(strings.TrimPrefix(baseFilename, "- "), "-")
+	baseFilename = strings.TrimSpace(baseFilename)
+	if baseFilename == "" || baseFilename == "video" || baseFilename == "YouTube_Video" {
+		baseFilename = "%(title)s"
 	}
 
 	isAudioOnly := strings.Contains(strings.ToLower(t.StreamQuality), "audio") ||
@@ -614,9 +633,11 @@ func (t *Task) startYouTubeDownload() {
 		strings.HasSuffix(strings.ToLower(t.Filename), ".m4a")
 
 	var args []string
+	outTemplate := filepath.Join(saveDir, baseFilename+".%(ext)s")
+
 	if isAudioOnly {
 		args = []string{
-			"-f", "bestaudio[ext=m4a]/bestaudio",
+			"-f", "bestaudio/best",
 			"-x",
 			"--audio-format", "mp3",
 			"--audio-quality", "0",
@@ -627,13 +648,13 @@ func (t *Task) startYouTubeDownload() {
 			t.URL,
 		}
 	} else {
-		formatArg := "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best"
+		formatArg := "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best"
 		if strings.Contains(t.StreamQuality, "720") {
-			formatArg = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best"
+			formatArg = "bestvideo[height<=720]+bestaudio/best[height<=720]/best"
 		} else if strings.Contains(t.StreamQuality, "480") {
-			formatArg = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best"
+			formatArg = "bestvideo[height<=480]+bestaudio/best[height<=480]/best"
 		} else if strings.Contains(t.StreamQuality, "360") {
-			formatArg = "18/best[height<=360]"
+			formatArg = "18/best[height<=360]/best"
 		}
 
 		args = []string{
@@ -663,6 +684,7 @@ func (t *Task) startYouTubeDownload() {
 	}
 
 	var finalCreatedFile string
+	var errLines []string
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -698,7 +720,12 @@ func (t *Task) startYouTubeDownload() {
 			m := re.FindStringSubmatch(line)
 			if len(m) > 1 {
 				finalCreatedFile = m[1]
+			} else if strings.Contains(line, "Destination:") {
+				finalCreatedFile = strings.TrimSpace(strings.TrimPrefix(line, "[download] Destination:"))
 			}
+		}
+		if strings.Contains(line, "ERROR:") || strings.Contains(line, "error:") {
+			errLines = append(errLines, line)
 		}
 	}
 
@@ -715,7 +742,11 @@ func (t *Task) startYouTubeDownload() {
 	}
 
 	if waitErr != nil {
-		t.fail(fmt.Errorf("video capture failed: %w", waitErr))
+		errDetail := strings.Join(errLines, "; ")
+		if errDetail == "" {
+			errDetail = waitErr.Error()
+		}
+		t.fail(fmt.Errorf("video capture failed: %s", errDetail))
 		return
 	}
 
@@ -724,14 +755,22 @@ func (t *Task) startYouTubeDownload() {
 	if finalCreatedFile != "" && isFile(finalCreatedFile) {
 		targetFile = finalCreatedFile
 	} else if !isFile(targetFile) {
-		base := strings.TrimSuffix(t.Filename, filepath.Ext(t.Filename))
-		cand := filepath.Join(saveDir, base+".mp4")
-		if isFile(cand) {
-			targetFile = cand
+		candMp4 := filepath.Join(saveDir, baseFilename+".mp4")
+		candMp3 := filepath.Join(saveDir, baseFilename+".mp3")
+		if isFile(candMp4) {
+			targetFile = candMp4
+		} else if isFile(candMp3) {
+			targetFile = candMp3
 		} else {
-			candM4a := filepath.Join(saveDir, base+".mp3")
-			if isFile(candM4a) {
-				targetFile = candM4a
+			if entries, err := os.ReadDir(saveDir); err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".mp4") || strings.HasSuffix(entry.Name(), ".mp3")) {
+						if baseFilename != "%(title)s" && strings.Contains(entry.Name(), baseFilename) {
+							targetFile = filepath.Join(saveDir, entry.Name())
+							break
+						}
+					}
+				}
 			}
 		}
 	}

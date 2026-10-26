@@ -529,6 +529,13 @@ func (va *VideoAnalyzer) analyzeHTML5Page(pageURL string, parsed *url.URL) (*Vid
 
 func sanitizeVideoTitle(title string) string {
 	clean := strings.TrimSpace(title)
+	clean = strings.TrimSuffix(clean, " - YouTube")
+	clean = strings.TrimSuffix(clean, "- YouTube")
+	clean = strings.TrimSuffix(clean, " - YouTube.mp4")
+	clean = strings.TrimPrefix(clean, "- ")
+	clean = strings.TrimPrefix(clean, "-")
+	clean = strings.TrimSpace(clean)
+
 	clean = strings.ReplaceAll(clean, "/", "-")
 	clean = strings.ReplaceAll(clean, "\\", "-")
 	clean = strings.ReplaceAll(clean, ":", " -")
@@ -538,10 +545,16 @@ func sanitizeVideoTitle(title string) string {
 	clean = strings.ReplaceAll(clean, "<", "")
 	clean = strings.ReplaceAll(clean, ">", "")
 	clean = strings.ReplaceAll(clean, "|", "-")
-	if len(clean) > 80 {
-		clean = clean[:80]
+
+	runes := []rune(clean)
+	if len(runes) > 80 {
+		clean = string(runes[:80])
 	}
-	if clean == "" {
+	clean = strings.TrimSpace(clean)
+	clean = strings.TrimPrefix(clean, "- ")
+	clean = strings.TrimPrefix(clean, "-")
+	clean = strings.TrimSpace(clean)
+	if clean == "" || clean == "YouTube" {
 		clean = "downloaded_video"
 	}
 	return clean
