@@ -83,3 +83,20 @@ func TestSanitizeVideoTitle(t *testing.T) {
 		t.Errorf("Expected %q, got %q", expected, clean)
 	}
 }
+
+func TestAnalyzeYouTube(t *testing.T) {
+	analyzer := NewVideoAnalyzer()
+	info, err := analyzer.Analyze(context.Background(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+	if err != nil {
+		t.Fatalf("Analyze YouTube failed: %v", err)
+	}
+	if info.Platform != "YouTube" {
+		t.Errorf("Expected platform YouTube, got %s", info.Platform)
+	}
+	if len(info.Formats) == 0 {
+		t.Errorf("Expected formats for YouTube video, got 0")
+	}
+	if info.Filename == "" || info.Filename == ".mp4" || info.Filename == "-.mp4" {
+		t.Errorf("Invalid filename generated: %q", info.Filename)
+	}
+}

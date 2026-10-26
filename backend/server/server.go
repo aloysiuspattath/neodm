@@ -189,7 +189,20 @@ func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 		targetQueue = "main_queue"
 	}
 
-	task, err := s.engine.AddTaskWithQueue(req.URL, req.Filename, req.SaveDir, cleanHeaders, targetQueue)
+	downloadURL := req.URL
+	downloadFilename := req.Filename
+	if strings.Contains(req.URL, "youtube.com") || strings.Contains(req.URL, "youtu.be") {
+		if s.videoAnalyzer != nil {
+			if vInfo, vErr := s.videoAnalyzer.Analyze(r.Context(), req.URL); vErr == nil && vInfo.BestURL != "" {
+				downloadURL = vInfo.BestURL
+				if downloadFilename == "" || strings.HasPrefix(downloadFilename, "-") {
+					downloadFilename = vInfo.Filename
+				}
+			}
+		}
+	}
+
+	task, err := s.engine.AddTaskWithQueue(downloadURL, downloadFilename, req.SaveDir, cleanHeaders, targetQueue)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -653,6 +666,21 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	downloadURL := req.URL
+	downloadFilename := req.Filename
+
+	// If req.URL is still a page URL (e.g. youtube.com), resolve to real direct stream URL
+	if strings.Contains(req.URL, "youtube.com") || strings.Contains(req.URL, "youtu.be") {
+		if s.videoAnalyzer != nil {
+			if vInfo, vErr := s.videoAnalyzer.Analyze(r.Context(), req.URL); vErr == nil && vInfo.BestURL != "" {
+				downloadURL = vInfo.BestURL
+				if downloadFilename == "" || strings.HasPrefix(downloadFilename, "-") {
+					downloadFilename = vInfo.Filename
+				}
+			}
+		}
+	}
+
 	saveDir := req.SaveDir
 	if saveDir == "" {
 		if s.store.Settings != nil && s.store.Settings.CategoryFolders != nil {
@@ -663,7 +691,7 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	task, err := s.engine.AddTask(req.URL, req.Filename, saveDir, nil)
+	task, err := s.engine.AddTask(downloadURL, downloadFilename, saveDir, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -722,18 +750,24 @@ func (s *Server) handleOpenFileOrFolder(w http.ResponseWriter, r *http.Request) 
 
 	go func() {
 		cleanPath := filepath.Clean(req.Path)
-		var cmd *exec.Cmd
 		if req.Type == "folder" {
-			if fi, err := os.Stat(cleanPath); err == nil && fi.IsDir() {
-				cmd = exec.Command("explorer", cleanPath)
+			// If file exists on disk, reveal it and highlight in Windows Explorer
+			if fi, err := os.Stat(cleanPath); err == nil && !fi.IsDir() {
+				cmd := exec.Command("explorer.exe", fmt.Sprintf("/select,%s", cleanPath))
+				_ = cmd.Start()
 			} else {
-				cmd = exec.Command("explorer", filepath.Dir(cleanPath))
+				dir := cleanPath
+				if fi, err := os.Stat(cleanPath); err != nil || !fi.IsDir() {
+					dir = filepath.Dir(cleanPath)
+				}
+				cmd := exec.Command("explorer.exe", dir)
+				_ = cmd.Start()
 			}
 		} else {
-			cmd = exec.Command("explorer", fmt.Sprintf("/select,%s", cleanPath))
+			// Launch file with Windows default associated application
+			cmd := exec.Command("cmd", "/c", "start", "", cleanPath)
+			_ = cmd.Start()
 		}
-		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-		_ = cmd.Run()
 	}()
 
 	w.Header().Set("Content-Type", "application/json")

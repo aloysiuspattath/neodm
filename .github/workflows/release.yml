@@ -26,13 +26,13 @@ jobs:
         run: |
           go build -ldflags="-s -w -H=windowsgui" -o neodm.exe main.go
           go build -ldflags="-s -w -H=windowsgui" -o ifd.exe main.go
-          go build -ldflags="-s -w" -o NovaDM-PRO-Setup.exe installer/main.go
+          go build -ldflags="-s -w" -o NeoDM-PRO-Setup.exe installer/main.go
 
       - name: Package Distribution Archives
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path dist
-          Copy-Item NovaDM-PRO-Setup.exe dist/
+          Copy-Item NeoDM-PRO-Setup.exe dist/
 
           # Package Portable Windows x64 ZIP
           $tempDir = "temp_portable"
@@ -42,11 +42,11 @@ jobs:
           Copy-Item README.md $tempDir/
           Copy-Item LICENSE $tempDir/
           Copy-Item -Recurse extension $tempDir/extension
-          Compress-Archive -Path "$tempDir/*" -DestinationPath dist/NovaDM-PRO-windows-x64.zip -Force
+          Compress-Archive -Path "$tempDir/*" -DestinationPath dist/NeoDM-PRO-windows-x64.zip -Force
           Remove-Item -Recurse -Force $tempDir
 
           # Package Browser Companion Extension ZIP
-          Compress-Archive -Path "extension/*" -DestinationPath dist/NovaDM-Browser-Extension.zip -Force
+          Compress-Archive -Path "extension/*" -DestinationPath dist/NeoDM-Browser-Extension.zip -Force
 
           # Generate SHA256 Checksums
           Get-FileHash -Algorithm SHA256 (Get-ChildItem dist/*) | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding utf8 dist/SHA256SUMS.txt
@@ -57,6 +57,6 @@ jobs:
           files: |
             dist/*
           generate_release_notes: true
-          title: "Nova Download Manager PRO ${{ github.ref_name }}"
+          title: "NeoDM - Neo Download Manager PRO ${{ github.ref_name }}"
           draft: false
           prerelease: false

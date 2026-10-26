@@ -71,9 +71,9 @@ func main() {
 			fmt.Print("\a") // Standard alert chime
 		}
 		if tray := platform.GetGlobalTray(); tray != nil {
-			tray.ShowBalloonNotification("Nova Download Manager PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
+			tray.ShowBalloonNotification("NeoDM PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
 		} else {
-			platform.ShowNotification("Nova Download Manager PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
+			platform.ShowNotification("NeoDM PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
 		}
 	})
 
@@ -171,9 +171,9 @@ func main() {
 		}
 		if activeCount > 0 {
 			speedStr := formatSpeed(totalSpeed)
-			tray.UpdateTooltip(fmt.Sprintf("NovaDM - %d downloading (%s)", activeCount, speedStr))
+			tray.UpdateTooltip(fmt.Sprintf("NeoDM - %d downloading (%s)", activeCount, speedStr))
 		} else {
-			tray.UpdateTooltip("Nova Download Manager PRO - Ready")
+			tray.UpdateTooltip("NeoDM PRO - Ready")
 		}
 	})
 
@@ -193,7 +193,7 @@ func main() {
 			activeWebView = w
 		})
 	} else {
-		log.Println("IFD running in headless daemon mode. Press Ctrl+C to exit.")
+		log.Println("NeoDM running in headless daemon mode. Press Ctrl+C to exit.")
 		select {}
 	}
 }
@@ -216,7 +216,7 @@ func openWebView(url string, startMinimized bool, onReady func(w webview2.WebVie
 		Debug:     false,
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{
-			Title:  "Nova Download Manager PRO",
+			Title:  "NeoDM - Neo Download Manager PRO",
 			Width:  1100,
 			Height: 720,
 			IconId: 1,

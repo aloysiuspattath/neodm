@@ -178,7 +178,7 @@ func NewTrayManager(callbacks TrayCallbacks) (*TrayManager, error) {
 
 func (tm *TrayManager) runMessageLoop() {
 	hInstance, _, _ := procGetModuleHandle.Call(0)
-	className := syscall.StringToUTF16Ptr("NovaDMTrayClass")
+	className := syscall.StringToUTF16Ptr("NeoDMTrayClass")
 
 	wndProc := syscall.NewCallback(func(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		switch msg {
@@ -254,7 +254,7 @@ func (tm *TrayManager) runMessageLoop() {
 		UCallbackMessage: WM_TRAYICON,
 		HIcon:            hIcon,
 	}
-	copyTip(&tm.nid.SzTip, "Nova Download Manager PRO")
+	copyTip(&tm.nid.SzTip, "NeoDM PRO")
 
 	procShellNotifyIcon.Call(NIM_ADD, uintptr(unsafe.Pointer(&tm.nid)))
 	tm.mu.Unlock()
@@ -284,7 +284,7 @@ func (tm *TrayManager) showContextMenu(hwnd uintptr) {
 		return
 	}
 
-	appendMenuItem(hMenu, 1, "Open NovaDM")
+	appendMenuItem(hMenu, 1, "Open NeoDM")
 	procAppendMenu.Call(hMenu, MF_SEPARATOR, 0, 0)
 	appendMenuItem(hMenu, 2, "Start All Downloads")
 	appendMenuItem(hMenu, 3, "Pause All Downloads")
@@ -292,7 +292,7 @@ func (tm *TrayManager) showContextMenu(hwnd uintptr) {
 	procAppendMenu.Call(hMenu, MF_SEPARATOR, 0, 0)
 	appendMenuItem(hMenu, 5, "Settings")
 	procAppendMenu.Call(hMenu, MF_SEPARATOR, 0, 0)
-	appendMenuItem(hMenu, 6, "Exit NovaDM")
+	appendMenuItem(hMenu, 6, "Exit NeoDM")
 
 	var pt POINT
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
@@ -413,7 +413,7 @@ func copyTip64(dest *[64]uint16, src string) {
 	}
 }
 
-// ShowAppWindow restores and brings the main NovaDM window to the foreground.
+// ShowAppWindow restores and brings the main NeoDM window to the foreground.
 func ShowAppWindow() {
 	hwnd := GetAppHWND()
 	if hwnd != 0 {
@@ -423,7 +423,7 @@ func ShowAppWindow() {
 	}
 }
 
-// HideAppWindow hides the main NovaDM window to the system tray.
+// HideAppWindow hides the main NeoDM window to the system tray.
 func HideAppWindow() {
 	hwnd := GetAppHWND()
 	if hwnd != 0 {

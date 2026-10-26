@@ -295,13 +295,14 @@ html, body {
 
 /* Frameless Title Bar (Native Windows Drag Support) */
 .window-titlebar {
-  height: 40px;
+  height: 48px;
   background: var(--bg-titlebar);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 0 14px;
+  padding: 6px 14px 6px 18px;
+  box-sizing: border-box;
   z-index: 100;
   flex-shrink: 0;
   user-select: none;
@@ -397,18 +398,19 @@ html, body {
   justify-content: center;
   align-items: center;
   height: 100%;
+  padding: 0 20px;
 }
 
 .search-pill {
   width: 100%;
-  max-width: 440px;
-  height: 32px;
+  max-width: 480px;
+  height: 34px;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 9999px;
   display: flex;
   align-items: center;
-  padding: 0 10px 0 14px;
+  padding: 0 12px 0 16px;
   gap: 10px;
   transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
 }
@@ -430,7 +432,7 @@ html, body {
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  color: #f8fafc !important;
+  color: var(--text-main) !important;
   font-size: 12.5px;
   padding: 0;
   margin: 0;
@@ -460,8 +462,9 @@ html, body {
 .titlebar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   height: 100%;
+  padding-right: 2px;
 }
 
 .btn-titlebar-action {
@@ -1826,7 +1829,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: 1000;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s ease-out;
@@ -2393,26 +2396,45 @@ textarea:focus {
 }
 
 .queue-manager-sidebar {
-  width: 240px;
+  width: 270px;
   background: var(--bg-card-subtle);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 10px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .queue-sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.queue-sidebar-header span {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-color);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+#btn-create-queue-modal {
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .queue-list-ui {
@@ -2824,7 +2846,7 @@ textarea:focus {
   bottom: 84px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 900;
+  z-index: 120;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2975,26 +2997,62 @@ textarea:focus {
 }
 
 /* ==========================================================================
-   Nova Dark PRO Pixel-Perfect Calibrations (Matches Mockup)
+   NeoDM Dark PRO Pixel-Perfect Calibrations (Matches Mockup)
    ========================================================================== */
 
 /* Inline Table Cells & Status Texts */
 .status-text {
-  font-size: 12.5px;
-  font-weight: 500;
-  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 .status-text.status-downloading {
+  background: rgba(37, 99, 235, 0.16);
   color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.35);
 }
 .status-text.status-queued {
+  background: rgba(245, 158, 11, 0.14);
   color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 .status-text.status-completed {
+  background: rgba(16, 185, 129, 0.14);
   color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }
 .status-text.status-paused {
+  background: rgba(148, 163, 184, 0.12);
   color: #94a3b8 !important;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+[data-theme="light"] .status-text.status-downloading {
+  background: #eff6ff;
+  color: #1d4ed8 !important;
+  border: 1px solid #93c5fd;
+}
+[data-theme="light"] .status-text.status-completed {
+  background: #f0fdf4;
+  color: #15803d !important;
+  border: 1px solid #86efac;
+}
+[data-theme="light"] .status-text.status-queued {
+  background: #fffbeb;
+  color: #b45309 !important;
+  border: 1px solid #fde68a;
+}
+[data-theme="light"] .status-text.status-paused {
+  background: #f8fafc;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1;
 }
 
 .progress-cell-inline {

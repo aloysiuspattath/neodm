@@ -14,7 +14,7 @@ import (
 func main() {
 	silent := flag.Bool("silent", false, "Perform unattended silent installation")
 	flag.BoolVar(silent, "s", false, "Perform unattended silent installation")
-	noLaunch := flag.Bool("no-launch", false, "Do not launch IFD after installation")
+	noLaunch := flag.Bool("no-launch", false, "Do not launch NeoDM after installation")
 	flag.Parse()
 
 	if !*silent {

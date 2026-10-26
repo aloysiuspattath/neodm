@@ -83,7 +83,7 @@ Simply run `neodm.exe` from any directory. NeoDM creates its portable data store
 
 NeoDM features a minimalist, de-congested design engineered for everyday users:
 - **▲ Vercel Dark (Default)**: Pure black canvas (`#000000`), `#080808` sidebar, `#222222` subtle borders, high-contrast crisp action buttons, and Vercel blue accents.
-- **🌌 Nova Dark PRO**: Deep space navy theme with fluent elevation.
+- **🌌 NeoDM Dark PRO**: Deep space navy theme with fluent elevation.
 - **🔮 Bento Glass**: Translucent glassmorphism with dynamic backdrop filters.
 - **🧛 Dracula Pro**: Official Dracula palette.
 - **❄️ Nordic Frost**: Clean cold Arctic theme.

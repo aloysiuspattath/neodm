@@ -6,25 +6,36 @@ package platform
 import (
 	"sync"
 	"syscall"
+	"unsafe"
 )
 
 var (
 	procFreeConsole      = kernel32.NewProc("FreeConsole")
 	procGetConsoleWindow = kernel32.NewProc("GetConsoleWindow")
 
-	user32               = syscall.NewLazyDLL("user32.dll")
-	procShowWindow       = user32.NewProc("ShowWindow")
-	procIsZoomed         = user32.NewProc("IsZoomed")
-	procPostMessage      = user32.NewProc("PostMessageW")
-	procSendMessage      = user32.NewProc("SendMessageW")
-	procReleaseCapture   = user32.NewProc("ReleaseCapture")
-	procGetWindowLong    = user32.NewProc("GetWindowLongW")
-	procSetWindowLong    = user32.NewProc("SetWindowLongW")
-	procSetWindowPos     = user32.NewProc("SetWindowPos")
+	user32                  = syscall.NewLazyDLL("user32.dll")
+	procShowWindow          = user32.NewProc("ShowWindow")
+	procIsZoomed            = user32.NewProc("IsZoomed")
+	procPostMessage         = user32.NewProc("PostMessageW")
+	procSendMessage         = user32.NewProc("SendMessageW")
+	procReleaseCapture      = user32.NewProc("ReleaseCapture")
+	procGetWindowLong       = user32.NewProc("GetWindowLongW")
+	procSetWindowLong       = user32.NewProc("SetWindowLongW")
+	procSetWindowPos        = user32.NewProc("SetWindowPos")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
+
+	dwmapi                    = syscall.NewLazyDLL("dwmapi.dll")
+	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 
 	appHWND uintptr
 	hwndMu  sync.RWMutex
+)
+
+const (
+	DWMWA_USE_IMMERSIVE_DARK_MODE     = 20
+	DWMWA_USE_IMMERSIVE_DARK_MODE_OLD = 19
+	DWMWA_BORDER_COLOR                = 34
+	DWMWA_CAPTION_COLOR               = 35
 )
 
 // DetachConsole immediately hides and frees any console window when in GUI mode.
@@ -83,6 +94,16 @@ func SetupFramelessWindow(hwnd uintptr) {
 		return
 	}
 	RegisterAppHWND(hwnd)
+
+	// Apply Windows 10/11 immersive dark mode to window frame and non-client border
+	darkMode := int32(1)
+	procDwmSetWindowAttribute.Call(hwnd, uintptr(DWMWA_USE_IMMERSIVE_DARK_MODE), uintptr(unsafe.Pointer(&darkMode)), 4)
+	procDwmSetWindowAttribute.Call(hwnd, uintptr(DWMWA_USE_IMMERSIVE_DARK_MODE_OLD), uintptr(unsafe.Pointer(&darkMode)), 4)
+
+	// Set border and caption color to dark slate (#0b0f19 -> 0x00190F0B in COLORREF format) to eliminate bright white frame line
+	darkBorder := uint32(0x00190F0B)
+	procDwmSetWindowAttribute.Call(hwnd, uintptr(DWMWA_BORDER_COLOR), uintptr(unsafe.Pointer(&darkBorder)), 4)
+	procDwmSetWindowAttribute.Call(hwnd, uintptr(DWMWA_CAPTION_COLOR), uintptr(unsafe.Pointer(&darkBorder)), 4)
 
 	style, _, _ := procGetWindowLong.Call(hwnd, uintptr(GWL_STYLE))
 	// Remove standard title bar caption but keep resize frame and minimize/maximize support
