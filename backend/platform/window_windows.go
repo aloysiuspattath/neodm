@@ -92,6 +92,12 @@ func PerformWindowAction(hwnd uintptr, action string) {
 	switch action {
 	case "minimize":
 		procShowWindow.Call(hwnd, uintptr(SW_MINIMIZE))
+	case "hide":
+		procShowWindow.Call(hwnd, uintptr(SW_HIDE))
+	case "show":
+		procShowWindow.Call(hwnd, uintptr(SW_SHOW))
+		procShowWindow.Call(hwnd, uintptr(SW_RESTORE))
+		procSetForegroundWindow.Call(hwnd)
 	case "maximize":
 		isMaximized, _, _ := procIsZoomed.Call(hwnd)
 		if isMaximized != 0 {
@@ -100,6 +106,13 @@ func PerformWindowAction(hwnd uintptr, action string) {
 			procShowWindow.Call(hwnd, uintptr(SW_MAXIMIZE))
 		}
 	case "close":
+		// If system tray is active, minimize to tray seamlessly
+		if GetGlobalTray() != nil {
+			procShowWindow.Call(hwnd, uintptr(SW_HIDE))
+		} else {
+			procPostMessage.Call(hwnd, uintptr(WM_CLOSE), 0, 0)
+		}
+	case "quit", "exit":
 		procPostMessage.Call(hwnd, uintptr(WM_CLOSE), 0, 0)
 	case "drag":
 		procReleaseCapture.Call()

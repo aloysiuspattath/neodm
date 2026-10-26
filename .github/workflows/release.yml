@@ -24,7 +24,7 @@ jobs:
 
       - name: Build Production Binaries
         run: |
-          go build -ldflags="-s -w" -o neodm.exe main.go
+          go build -ldflags="-s -w -H=windowsgui" -o neodm.exe main.go
           go build -ldflags="-s -w" -o NovaDM-PRO-Setup.exe installer/main.go
 
       - name: Package Distribution Archives

@@ -37,25 +37,32 @@ func RunCLI(args []string) bool {
 
 	// Direct URL shorthand: `neodm https://example.com/file.zip`
 	if strings.HasPrefix(firstArg, "http://") || strings.HasPrefix(firstArg, "https://") || strings.HasPrefix(firstArg, "ftp://") {
+		AttachConsoleIfNeeded()
 		return runDownloadCmd(args[1:])
 	}
 
 	switch firstArg {
 	case "download", "get":
+		AttachConsoleIfNeeded()
 		return runDownloadCmd(args[2:])
 	case "list", "ls":
+		AttachConsoleIfNeeded()
 		return runListCmd()
 	case "version", "-v", "--version":
+		AttachConsoleIfNeeded()
 		printVersion()
 		return true
 	case "help", "-h", "--help":
+		AttachConsoleIfNeeded()
 		printHelp()
 		return true
 	default:
 		// If it looks like a flag for download, e.g. `neodm -o test.iso https://...`
 		if strings.HasPrefix(firstArg, "-") {
+			AttachConsoleIfNeeded()
 			return runDownloadCmd(args[1:])
 		}
+		AttachConsoleIfNeeded()
 		printHelp()
 		return true
 	}

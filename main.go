@@ -36,6 +36,7 @@ func main() {
 	flag.Parse()
 
 	if *installFlag {
+		cli.AttachConsoleIfNeeded()
 		if err := platform.InstallApp(); err != nil {
 			log.Fatalf("Installation failed: %v", err)
 		}
@@ -44,6 +45,7 @@ func main() {
 	}
 
 	if *uninstallFlag {
+		cli.AttachConsoleIfNeeded()
 		if err := platform.UninstallApp(); err != nil {
 			log.Fatalf("Uninstallation failed: %v", err)
 		}
@@ -65,7 +67,11 @@ func main() {
 		if store.Settings.SoundAlertOnComplete {
 			fmt.Print("\a") // Standard alert chime
 		}
-		platform.ShowNotification("Nova Download Manager PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
+		if tray := platform.GetGlobalTray(); tray != nil {
+			tray.ShowBalloonNotification("Nova Download Manager PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
+		} else {
+			platform.ShowNotification("Nova Download Manager PRO", fmt.Sprintf("%s finished downloading.", t.Filename))
+		}
 	})
 
 	// 3. Prepare frontend assets
@@ -83,9 +89,9 @@ func main() {
 	if err != nil {
 		// Port may already be in use by an existing IFD instance
 		log.Printf("Port %s already active: %v", addr, err)
-		// If another instance is running, open UI or exit
+		// If another instance is running, bring existing window to front or exit
 		if !*noGui {
-			openWebView(fmt.Sprintf("http://%s/index.html", addr), *minimized)
+			platform.ShowAppWindow()
 		}
 		return
 	}
@@ -97,7 +103,79 @@ func main() {
 		}
 	}()
 
-	// 5. Start clipboard monitoring
+	// 5. Initialize desktop system tray
+	var activeWebView webview2.WebView
+	var tray *platform.TrayManager
+
+	tray, _ = platform.NewTrayManager(platform.TrayCallbacks{
+		OnShow: func() {
+			platform.ShowAppWindow()
+		},
+		OnStartAll: func() {
+			for _, rec := range eng.GetAllTasks() {
+				if rec.Status == "Paused" || rec.Status == "Error" || rec.Status == "Queued" {
+					if t := eng.GetTask(rec.ID); t != nil {
+						t.Resume()
+					}
+				}
+			}
+		},
+		OnPauseAll: func() {
+			for _, rec := range eng.GetAllTasks() {
+				if rec.Status == "Downloading" || rec.Status == "Connecting" {
+					if t := eng.GetTask(rec.ID); t != nil {
+						t.Pause()
+					}
+				}
+			}
+		},
+		OnAddDownload: func() {
+			platform.ShowAppWindow()
+			if activeWebView != nil {
+				activeWebView.Eval("openModal('modal-add-download'); switchAddTab('tab-add-url');")
+			}
+		},
+		OnSettings: func() {
+			platform.ShowAppWindow()
+			if activeWebView != nil {
+				activeWebView.Eval("openSettingsModal();")
+			}
+		},
+		OnExit: func() {
+			if tray != nil {
+				tray.Destroy()
+			}
+			os.Exit(0)
+		},
+	})
+	defer func() {
+		if tray != nil {
+			tray.Destroy()
+		}
+	}()
+
+	eng.OnTaskUpdate(func(t *engine.Task) {
+		if tray == nil {
+			return
+		}
+		tasks := eng.GetAllTasks()
+		activeCount := 0
+		var totalSpeed int64 = 0
+		for _, task := range tasks {
+			if task.Status == "Downloading" {
+				activeCount++
+				totalSpeed += task.Speed
+			}
+		}
+		if activeCount > 0 {
+			speedStr := formatSpeed(totalSpeed)
+			tray.UpdateTooltip(fmt.Sprintf("NovaDM - %d downloading (%s)", activeCount, speedStr))
+		} else {
+			tray.UpdateTooltip("Nova Download Manager PRO - Ready")
+		}
+	})
+
+	// 6. Start clipboard monitoring
 	clipboardWatcher := platform.NewClipboardWatcher(func(detectedURL string) {
 		srv.Hub().BroadcastEvent("clipboard_url", detectedURL)
 	})
@@ -106,17 +184,32 @@ func main() {
 	// Wait briefly for server to bind
 	time.Sleep(200 * time.Millisecond)
 
-	// 6. Launch Desktop Window
+	// 7. Launch Desktop Window
 	if !*noGui {
 		uiURL := fmt.Sprintf("http://%s/index.html", addr)
-		openWebView(uiURL, *minimized)
+		openWebView(uiURL, *minimized, func(w webview2.WebView) {
+			activeWebView = w
+		})
 	} else {
 		log.Println("IFD running in headless daemon mode. Press Ctrl+C to exit.")
 		select {}
 	}
 }
 
-func openWebView(url string, startMinimized bool) {
+func formatSpeed(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B/s", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB/s", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+func openWebView(url string, startMinimized bool, onReady func(w webview2.WebView)) {
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
 		AutoFocus: true,
@@ -151,6 +244,14 @@ func openWebView(url string, startMinimized bool) {
 
 	w.SetSize(1100, 720, webview2.HintNone)
 	w.Navigate(url)
+
+	if onReady != nil {
+		onReady(w)
+	}
+
+	if startMinimized {
+		platform.HideAppWindow()
+	}
 
 	w.Run()
 }

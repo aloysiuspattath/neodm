@@ -61,7 +61,7 @@ func main() {
 			installedExe = filepath.Join(platform.GetInstallDir(), "ifd.exe")
 		}
 		launchCmd := exec.Command(installedExe)
-		launchCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
+		launchCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		_ = launchCmd.Start()
 	}
 }
