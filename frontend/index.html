@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="nova">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,10 +12,11 @@
   <div class="window-titlebar" id="window-titlebar">
     <div class="titlebar-left" id="titlebar-drag-area">
       <div class="titlebar-brand">
-        <div class="titlebar-logo">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <div class="titlebar-logo-glass" title="Nova Download Manager PRO">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="7 10 12 15 17 10"></polyline>
             <line x1="12" y1="15" x2="12" y2="3"></line>
+            <path d="M5 20h14"></path>
           </svg>
         </div>
         <span class="titlebar-title">Nova Download Manager</span>
@@ -43,18 +44,24 @@
     </div>
 
     <div class="titlebar-right">
+      <!-- Bento Segmented Theme Switcher -->
+      <div class="bento-theme-switch" id="bento-theme-switch" role="radiogroup" aria-label="Theme mode">
+        <button class="theme-pill-btn active" data-theme="dark" id="theme-btn-dark" title="Switch to Bento Dark">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <span>Dark</span>
+        </button>
+        <button class="theme-pill-btn" data-theme="light" id="theme-btn-light" title="Switch to Bento Light">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <span>Light</span>
+        </button>
+      </div>
+
       <!-- Hidden legacy hooks for theme/stats to keep controllers working -->
       <button class="btn-titlebar-action" id="btn-toggle-stats" style="display: none;"><span id="stats-btn-text"></span></button>
       <div class="theme-select-wrap" style="display: none;">
         <select id="theme-selector" class="theme-dropdown">
-          <option value="nova" selected>🌌 Nova Dark PRO</option>
-          <option value="vercel">▲ Vercel Dark</option>
-          <option value="glass">🔮 Bento Glass</option>
-          <option value="dracula">🧛 Dracula Pro</option>
-          <option value="nord">❄️ Nordic Frost</option>
-          <option value="cyberpunk">⚡ Cyberpunk Neon</option>
-          <option value="oled">🖤 Midnight OLED</option>
-          <option value="light">☀️ Fluent Light</option>
+          <option value="dark" selected>Bento Dark</option>
+          <option value="light">Bento Light</option>
         </select>
       </div>
 
@@ -66,7 +73,7 @@
         <button class="win-btn win-max" id="win-btn-max" title="Maximize">
           <svg width="10" height="10" viewBox="0 0 10 10"><rect x="0.5" y="0.5" width="9" height="9" fill="none" stroke="currentColor" stroke-width="1"/></svg>
         </button>
-        <button class="win-btn win-close" id="win-btn-close" title="Close">
+        <button class="win-btn win-close" id="win-btn-close" title="Close to tray">
           <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         </button>
       </div>
@@ -104,7 +111,7 @@
                 </svg>
               </span>
               <span class="nav-label">All Downloads</span>
-              <span class="badge badge-active-pill" id="count-all">12</span>
+              <span class="badge badge-active-pill" id="count-all">0</span>
             </li>
             <li class="nav-item" data-filter="downloading">
               <span class="nav-icon">
@@ -115,7 +122,7 @@
                 </svg>
               </span>
               <span class="nav-label">Downloading</span>
-              <span class="badge" id="count-downloading">3</span>
+              <span class="badge" id="count-downloading">0</span>
             </li>
             <li class="nav-item" data-filter="completed">
               <span class="nav-icon">
@@ -125,7 +132,7 @@
                 </svg>
               </span>
               <span class="nav-label">Completed</span>
-              <span class="badge" id="count-completed">142</span>
+              <span class="badge" id="count-completed">0</span>
             </li>
             <li class="nav-item" data-category="Videos">
               <span class="nav-icon">
@@ -135,7 +142,7 @@
                 </svg>
               </span>
               <span class="nav-label">Video</span>
-              <span class="badge" id="count-video">28</span>
+              <span class="badge" id="count-video">0</span>
             </li>
             <li class="nav-item" data-category="Music">
               <span class="nav-icon">
@@ -146,7 +153,7 @@
                 </svg>
               </span>
               <span class="nav-label">Audio</span>
-              <span class="badge" id="count-audio">16</span>
+              <span class="badge" id="count-audio">0</span>
             </li>
             <li class="nav-item" data-category="Documents">
               <span class="nav-icon">
@@ -158,7 +165,7 @@
                 </svg>
               </span>
               <span class="nav-label">Documents</span>
-              <span class="badge" id="count-documents">18</span>
+              <span class="badge" id="count-documents">0</span>
             </li>
             <li class="nav-item" data-category="Programs">
               <span class="nav-icon">
@@ -170,7 +177,7 @@
                 </svg>
               </span>
               <span class="nav-label">Programs</span>
-              <span class="badge" id="count-programs">21</span>
+              <span class="badge" id="count-programs">0</span>
             </li>
             <li class="nav-item" data-category="Compressed">
               <span class="nav-icon">
@@ -181,7 +188,7 @@
                 </svg>
               </span>
               <span class="nav-label">Compressed</span>
-              <span class="badge" id="count-compressed">14</span>
+              <span class="badge" id="count-compressed">0</span>
             </li>
             <li class="nav-item" data-category="Pictures">
               <span class="nav-icon">
@@ -192,7 +199,7 @@
                 </svg>
               </span>
               <span class="nav-label">Pictures</span>
-              <span class="badge" id="count-pictures">10</span>
+              <span class="badge" id="count-pictures">0</span>
             </li>
             <li class="nav-item" data-category="Other">
               <span class="nav-icon">
@@ -202,7 +209,7 @@
                 </svg>
               </span>
               <span class="nav-label">Other</span>
-              <span class="badge" id="count-other">5</span>
+              <span class="badge" id="count-other">0</span>
             </li>
           </ul>
         </div>
@@ -443,16 +450,17 @@
           <table class="downloads-table" id="main-downloads-table">
             <thead>
               <tr>
-                <th style="width: 28px; text-align: center; display: none;">
-                  <input type="checkbox" id="check-all-downloads" title="Select All">
+                <th style="width: 38px; text-align: center;">
+                  <input type="checkbox" id="check-all-downloads" class="table-checkbox" title="Select All (Ctrl+A)">
                 </th>
                 <th style="text-align: left;">Name</th>
-                <th style="width: 120px;">Status</th>
-                <th style="width: 180px;">Progress</th>
-                <th style="width: 110px;">Speed</th>
-                <th style="width: 120px;">Size</th>
-                <th style="width: 105px;">Time Left</th>
-                <th style="width: 110px; text-align: right;"></th>
+                <th style="width: 110px;">Status</th>
+                <th style="width: 90px; text-align: center;">Resume</th>
+                <th style="width: 170px;">Progress</th>
+                <th style="width: 105px;">Speed</th>
+                <th style="width: 110px;">Size</th>
+                <th style="width: 95px;">Time Left</th>
+                <th style="width: 110px; text-align: right;">Actions</th>
               </tr>
             </thead>
             <tbody id="downloads-tbody">
@@ -476,6 +484,31 @@
             </div>
             <h3>No Downloads Found</h3>
             <p>Click <strong>+ Add Download</strong>, press <strong>Ctrl+V</strong> to paste a copied link, or use the Browser Extension.</p>
+          </div>
+        </div>
+
+        <!-- Floating Bento Batch Action Dock -->
+        <div class="bento-batch-dock" id="bento-batch-dock" style="display: none;">
+          <div class="batch-count-pill">
+            <span class="batch-pulse-dot"></span>
+            <span id="batch-selected-count">0</span> items selected
+          </div>
+          <div class="batch-actions-group">
+            <button class="btn-batch-action" id="btn-batch-start" title="Start / Resume Selected">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <span>Start</span>
+            </button>
+            <button class="btn-batch-action" id="btn-batch-pause" title="Pause Selected">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              <span>Pause</span>
+            </button>
+            <button class="btn-batch-action btn-batch-danger" id="btn-batch-delete" title="Delete Selected">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Delete</span>
+            </button>
+            <button class="btn-batch-action btn-batch-subtle" id="btn-batch-clear" title="Clear Selection (Esc)">
+              <span>Clear</span>
+            </button>
           </div>
         </div>
 
@@ -566,6 +599,9 @@
     </div>
     <div class="ctx-item" id="ctx-edit">
       <span class="ctx-icon">✏️</span> Edit Download...
+    </div>
+    <div class="ctx-item" id="ctx-renew-url">
+      <span class="ctx-icon">🔄</span> Renew Download Address (URL)...
     </div>
     <div class="ctx-item" id="ctx-copy-link">
       <span class="ctx-icon">📋</span> Copy Download Link
@@ -1221,13 +1257,8 @@
             <div class="form-group">
               <label>Visual Theme:</label>
               <select id="setting-theme-picker">
-                <option value="nova">🌌 Nova Dark PRO (Recommended)</option>
-                <option value="glass">🔮 Bento Glassmorphism</option>
-                <option value="dracula">🧛 Dracula Pro (High Contrast)</option>
-                <option value="nord">❄️ Nordic Frost</option>
-                <option value="cyberpunk">⚡ Cyberpunk Neon Glow</option>
-                <option value="oled">🖤 Midnight OLED (Pure Black)</option>
-                <option value="light">☀️ Windows 11 Fluent Light</option>
+                <option value="dark">🌙 Bento Dark (Modern Slate & Glow)</option>
+                <option value="light">☀️ Bento Light (Clean Neumorphic Card)</option>
               </select>
             </div>
             <div class="checkbox-row" style="margin-top: 16px;">
@@ -1260,6 +1291,71 @@
         <div style="flex: 1;"></div>
         <button class="btn" onclick="closeModal('modal-settings')">Cancel</button>
         <button class="btn btn-primary" id="btn-save-settings">Save & Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Renew Download Address (URL) -->
+  <div class="modal-overlay" id="modal-renew-url">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <svg class="modal-header-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+          <h2 class="modal-title">Renew Download Address</h2>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-renew-url')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-description-subtle" style="margin-bottom: 14px; font-size: 13px; color: var(--text-secondary); line-height: 1.5;">
+          If a download link has expired or requires refreshed session tokens, paste the fresh URL below. NeoDM will continue downloading partial chunks without restarting.
+        </p>
+        <div class="form-group">
+          <label class="form-label-subtle">Target File</label>
+          <input type="text" id="renew-filename" readonly class="input-readonly">
+        </div>
+        <div class="form-group">
+          <label class="form-label-subtle">New Fresh URL</label>
+          <div class="input-with-paste">
+            <input type="text" id="renew-url-input" placeholder="https://example.com/fresh-temporary-link..." autofocus>
+            <button class="btn-paste-icon" id="btn-paste-renew-url" type="button" title="Paste from Clipboard">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-modal-cancel" onclick="closeModal('modal-renew-url')">Cancel</button>
+        <button class="btn btn-modal-download" id="btn-submit-renew-url">Update URL & Resume</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Non-Resumable Pause Warning -->
+  <div class="modal-overlay" id="modal-pause-warning">
+    <div class="modal-card modal-sm modal-warning-card">
+      <div class="modal-header">
+        <div class="modal-title-row text-warning">
+          <svg class="modal-header-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <h2 class="modal-title">Non-Resumable Download</h2>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-pause-warning')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-primary); margin-bottom: 12px; line-height: 1.5;">This server does <strong>not support byte ranges</strong> (non-resumable). If you pause or stop it now, downloading will have to restart from 0% from the beginning.</p>
+        <p style="font-size: 12.5px; color: var(--accent-warning); font-weight: 500;">Are you sure you want to pause?</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-modal-cancel" onclick="closeModal('modal-pause-warning')">Keep Downloading</button>
+        <button class="btn btn-danger" id="btn-confirm-pause-nonresumable">Pause Anyway</button>
       </div>
     </div>
   </div>

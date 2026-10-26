@@ -10,6 +10,9 @@ let searchQuery = '';
 let activeInspectId = null;
 let selectedCtxTask = null;
 let selectedTaskIds = new Set();
+let lastSelectedId = null;
+let currentRenewTaskId = null;
+let pendingPauseTaskId = null;
 let speedHistory = new Array(30).fill(0);
 let bottomSpeedHistory = new Array(40).fill(0);
 let speedCanvas, speedCtx;
@@ -20,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTitlebarAndThemes();
   initNavigationAndToolbar();
   initQuickDownloadBar();
+  initBentoBatchDock();
   initCanvases();
   initShortcutsAndDragDrop();
   initContextMenu();
@@ -42,11 +46,11 @@ function initTitlebarAndThemes() {
   if (titlebar) {
     titlebar.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return; // Only drag on primary left click
-      if (e.target.closest('button, select, input, .search-pill, .theme-select-wrap, .window-controls')) return;
+      if (e.target.closest('button, select, input, .search-pill, .bento-theme-switch, .theme-select-wrap, .window-controls')) return;
       windowAction('drag');
     });
     titlebar.addEventListener('dblclick', (e) => {
-      if (e.target.closest('button, select, input, .search-pill, .theme-select-wrap, .window-controls')) return;
+      if (e.target.closest('button, select, input, .search-pill, .bento-theme-switch, .theme-select-wrap, .window-controls')) return;
       windowAction('maximize');
     });
   }
@@ -85,18 +89,28 @@ function initTitlebarAndThemes() {
     });
   }
 
-  // Theme Dropdown (Default is Nova Dark PRO)
+  // Bento Theme Switcher: Dark & Light
+  const themeBtnDark = document.getElementById('theme-btn-dark');
+  const themeBtnLight = document.getElementById('theme-btn-light');
   const themeSelector = document.getElementById('theme-selector');
   const settingThemePicker = document.getElementById('setting-theme-picker');
-  const savedTheme = localStorage.getItem('neodm-theme') || 'nova';
+  let savedTheme = localStorage.getItem('neodm-theme') || 'dark';
+  if (savedTheme !== 'light' && savedTheme !== 'dark') {
+    savedTheme = 'dark';
+  }
 
   applyTheme(savedTheme, false);
 
+  if (themeBtnDark) {
+    themeBtnDark.addEventListener('click', () => applyTheme('dark', true));
+  }
+  if (themeBtnLight) {
+    themeBtnLight.addEventListener('click', () => applyTheme('light', true));
+  }
   if (themeSelector) {
     themeSelector.value = savedTheme;
     themeSelector.addEventListener('change', (e) => applyTheme(e.target.value, true));
   }
-
   if (settingThemePicker) {
     settingThemePicker.value = savedTheme;
     settingThemePicker.addEventListener('change', (e) => applyTheme(e.target.value, true));
@@ -104,8 +118,15 @@ function initTitlebarAndThemes() {
 }
 
 function applyTheme(theme, notify = true) {
+  if (theme !== 'light' && theme !== 'dark') theme = 'dark';
   document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme;
   localStorage.setItem('neodm-theme', theme);
+
+  const themeBtnDark = document.getElementById('theme-btn-dark');
+  const themeBtnLight = document.getElementById('theme-btn-light');
+  if (themeBtnDark) themeBtnDark.classList.toggle('active', theme === 'dark');
+  if (themeBtnLight) themeBtnLight.classList.toggle('active', theme === 'light');
 
   const themeSelector = document.getElementById('theme-selector');
   if (themeSelector) themeSelector.value = theme;
@@ -113,14 +134,8 @@ function applyTheme(theme, notify = true) {
   if (settingThemePicker) settingThemePicker.value = theme;
 
   const names = {
-    vercel: '▲ Vercel Dark (Minimalist)',
-    nova: 'Nova Dark PRO',
-    glass: 'Bento Glassmorphism',
-    dracula: 'Dracula Pro',
-    nord: 'Nordic Frost',
-    cyberpunk: 'Cyberpunk Neon',
-    oled: 'Midnight OLED',
-    light: 'Fluent Light'
+    dark: '🌙 Bento Dark',
+    light: '☀️ Bento Light'
   };
   if (notify) {
     showToast(`Theme: ${names[theme] || theme}`);
@@ -404,71 +419,77 @@ function initNavigationAndToolbar() {
         filtered.forEach(d => selectedTaskIds.add(d.id));
       } else {
         selectedTaskIds.clear();
+        lastSelectedId = null;
       }
       renderDownloads();
+      updateTelemetryDock();
+      updateBentoBatchDock();
     });
   }
 }
 
+function updateBentoBatchDock() {
+  const dock = document.getElementById('bento-batch-dock');
+  const countEl = document.getElementById('batch-selected-count');
+  if (!dock) return;
+  if (selectedTaskIds.size > 0) {
+    dock.style.display = 'flex';
+    if (countEl) countEl.textContent = selectedTaskIds.size;
+  } else {
+    dock.style.display = 'none';
+  }
+}
+
+function initBentoBatchDock() {
+  document.getElementById('btn-batch-start')?.addEventListener('click', () => {
+    if (selectedTaskIds.size > 0) batchAction('start_selected');
+  });
+  document.getElementById('btn-batch-pause')?.addEventListener('click', () => {
+    if (selectedTaskIds.size > 0) batchAction('pause_selected');
+  });
+  document.getElementById('btn-batch-delete')?.addEventListener('click', () => {
+    if (selectedTaskIds.size > 0) batchAction('delete_selected');
+  });
+  document.getElementById('btn-batch-clear')?.addEventListener('click', () => {
+    selectedTaskIds.clear();
+    lastSelectedId = null;
+    renderDownloads();
+    updateTelemetryDock();
+    updateBentoBatchDock();
+  });
+}
+
 async function batchAction(action, ids = null) {
-  const isShowcase = downloads.some(d => d.id && d.id.startsWith('showcase-'));
-  if (isShowcase) {
-    if (action === 'pause_all') {
-      downloads.forEach(d => {
-        if (d.status === 'Downloading') {
-          d.status = 'Paused';
-          d.speed = 0;
-        }
-      });
-      showToast('All active downloads paused');
-      renderDownloads();
-      return;
-    }
-    if (action === 'start_all') {
-      downloads.forEach(d => {
-        if (d.status === 'Paused' || d.status === 'Queued') {
-          d.status = 'Downloading';
-          d.speed = 12400000;
-        }
-      });
-      showToast('All downloads resumed', 'success');
-      renderDownloads();
-      return;
-    }
-    if (action === 'delete_completed' || action === 'clean_list') {
-      downloads = downloads.filter(d => d.status !== 'Completed');
-      showToast('Removed finished downloads from list');
-      renderDownloads();
-      return;
-    }
-    if (action === 'delete_selected') {
-      downloads = downloads.filter(d => !selectedTaskIds.has(d.id));
-      selectedTaskIds.clear();
-      showToast('Removed selected downloads');
-      renderDownloads();
-      return;
-    }
+  const targetIds = ids || Array.from(selectedTaskIds);
+  if (action.endsWith('_selected') && targetIds.length === 0) {
+    showToast('No downloads selected', 'warning');
+    return;
   }
 
   try {
     const res = await fetch('/api/download/batch_action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, ids: ids || Array.from(selectedTaskIds) })
+      body: JSON.stringify({ action, ids: targetIds })
     });
     if (res.ok) {
       if (action === 'delete_completed' || action === 'delete_selected') {
         selectedTaskIds.clear();
+        lastSelectedId = null;
       }
+      const count = targetIds.length;
       const messages = {
         start_all: 'All downloads resumed',
         pause_all: 'All active downloads paused',
+        start_selected: `Started ${count} selected download(s)`,
+        pause_selected: `Paused ${count} selected download(s)`,
         delete_completed: 'Removed finished downloads from list',
-        delete_selected: 'Removed selected downloads',
+        delete_selected: `Removed ${count} selected download(s)`,
         delete_all_files: 'All downloaded files deleted from disk'
       };
       showToast(messages[action] || 'Batch operation complete', action.includes('delete') ? 'info' : 'success');
       loadInitialData();
+      updateBentoBatchDock();
     }
   } catch (e) {
     console.error('Batch action error:', e);
@@ -678,16 +699,39 @@ async function readAppClipboard() {
 
 // Shortcuts & Drag and Drop
 function initShortcutsAndDragDrop() {
-  // Global Ctrl+V / Ctrl+N / Ctrl+F / Escape
+  // Global Ctrl+V / Ctrl+N / Ctrl+F / Ctrl+A / Escape
   window.addEventListener('keydown', async (e) => {
-    // Escape key closes open menus and modals
+    // Escape key closes open menus and modals or clears selection
     if (e.key === 'Escape') {
       const moreActionsMenu = document.getElementById('more-actions-menu');
       if (moreActionsMenu) moreActionsMenu.classList.remove('open');
       const ctxMenu = document.getElementById('custom-context-menu');
       if (ctxMenu) ctxMenu.style.display = 'none';
       document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+
+      if (selectedTaskIds.size > 0) {
+        selectedTaskIds.clear();
+        lastSelectedId = null;
+        renderDownloads();
+        updateTelemetryDock();
+        updateBentoBatchDock();
+      }
       return;
+    }
+
+    // Master Select-All (Ctrl+A)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      const activeEl = document.activeElement;
+      const tag = activeEl ? activeEl.tagName : '';
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || activeEl?.isContentEditable;
+      if (!isInput) {
+        e.preventDefault();
+        const filtered = getFilteredDownloads();
+        filtered.forEach(d => selectedTaskIds.add(d.id));
+        renderDownloads();
+        updateTelemetryDock();
+        updateBentoBatchDock();
+      }
     }
 
     // Native Ctrl+V handling anywhere in the app
@@ -849,6 +893,9 @@ function initContextMenu() {
       navigator.clipboard.writeText(selectedCtxTask.url);
       showToast('Download link copied to clipboard');
     }
+  });
+  document.getElementById('ctx-renew-url')?.addEventListener('click', () => {
+    if (selectedCtxTask) openRenewUrlModal(selectedCtxTask);
   });
   document.getElementById('ctx-view-segments')?.addEventListener('click', () => {
     if (selectedCtxTask) openSegmentVisualizer(selectedCtxTask.id);
@@ -1119,124 +1166,7 @@ function handleTelemetry(data) {
   }
 }
 
-const SHOWCASE_DOWNLOADS = [
-  {
-    id: 'showcase-1',
-    filename: 'ubuntu-24.04.2-desktop-amd64.iso',
-    status: 'Downloading',
-    percent: 62,
-    downloadedBytes: 2800000000, // 2.8 GB
-    totalSize: 4500000000,       // 4.5 GB
-    speed: 12400000,             // 12.4 MB/s
-    eta: 192,                    // 3m 12s
-    timeLeft: '3m 12s',
-    category: 'Documents',
-    url: 'https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-2',
-    filename: 'Adobe.Photoshop.2025.exe',
-    status: 'Downloading',
-    percent: 34,
-    downloadedBytes: 1200000000, // 1.2 GB
-    totalSize: 3400000000,       // 3.4 GB
-    speed: 5600000,              // 5.6 MB/s
-    eta: 401,                    // 6m 41s
-    timeLeft: '6m 41s',
-    category: 'Programs',
-    url: 'https://creativecloud.adobe.com/downloads/Adobe.Photoshop.2025.exe',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-3',
-    filename: 'Interstellar.2014.1080p.BluRay.x264.mkv',
-    status: 'Downloading',
-    percent: 78,
-    downloadedBytes: 5600000000, // 5.6 GB
-    totalSize: 7100000000,       // 7.1 GB
-    speed: 18900000,             // 18.9 MB/s
-    eta: 63,                     // 1m 03s
-    timeLeft: '1m 03s',
-    category: 'Videos',
-    url: 'https://archive.org/download/interstellar/Interstellar.2014.1080p.BluRay.x264.mkv',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-4',
-    filename: 'FigmaSetup.exe',
-    status: 'Queued',
-    percent: 0,
-    downloadedBytes: 0,
-    totalSize: 118 * 1024 * 1024, // 118 MB
-    speed: 0,
-    eta: 0,
-    timeLeft: '—',
-    category: 'Programs',
-    url: 'https://desktop.figma.com/win/FigmaSetup.exe',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-5',
-    filename: 'Clarity-Wallpapers.zip',
-    status: 'Completed',
-    percent: 100,
-    downloadedBytes: 432 * 1024 * 1024, // 432 MB
-    totalSize: 432 * 1024 * 1024,       // 432 MB
-    speed: 0,
-    eta: 0,
-    timeLeft: 'Yesterday',
-    completedTime: 'Yesterday',
-    category: 'Compressed',
-    url: 'https://wallpapers.clarity.io/Clarity-Wallpapers.zip',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-6',
-    filename: 'React-Guide.pdf',
-    status: 'Completed',
-    percent: 100,
-    downloadedBytes: 12.4 * 1024 * 1024, // 12.4 MB
-    totalSize: 12.4 * 1024 * 1024,       // 12.4 MB
-    speed: 0,
-    eta: 0,
-    timeLeft: 'Yesterday',
-    completedTime: 'Yesterday',
-    category: 'Documents',
-    url: 'https://react.dev/docs/React-Guide.pdf',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-7',
-    filename: 'Music Collection.zip',
-    status: 'Completed',
-    percent: 100,
-    downloadedBytes: 2.1 * 1024 * 1024 * 1024, // 2.1 GB
-    totalSize: 2.1 * 1024 * 1024 * 1024,       // 2.1 GB
-    speed: 0,
-    eta: 0,
-    timeLeft: '2 days ago',
-    completedTime: '2 days ago',
-    category: 'Compressed',
-    url: 'https://archive.org/download/music_collection/Music%20Collection.zip',
-    queueId: 'main_queue'
-  },
-  {
-    id: 'showcase-8',
-    filename: 'Sample Video.mp4',
-    status: 'Completed',
-    percent: 100,
-    downloadedBytes: 700 * 1024 * 1024, // 700 MB
-    totalSize: 700 * 1024 * 1024,       // 700 MB
-    speed: 0,
-    eta: 0,
-    timeLeft: '3 days ago',
-    completedTime: '3 days ago',
-    category: 'Videos',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sample%20Video.mp4',
-    queueId: 'main_queue'
-  }
-];
+const SHOWCASE_DOWNLOADS = [];
 
 function getFileTypeLabel(filename, category) {
   const name = (filename || '').toLowerCase();
@@ -1261,18 +1191,12 @@ async function loadInitialData() {
 
     if (dRes.ok) {
       const dJson = await dRes.json();
-      const backendDownloads = dJson.downloads || [];
-      if (backendDownloads.length > 0) {
-        downloads = backendDownloads;
-        localStorage.setItem('neodm-real-downloads-seen', 'true');
-      } else if (localStorage.getItem('neodm-real-downloads-seen') === 'true') {
-        downloads = [];
-      } else {
-        downloads = [...SHOWCASE_DOWNLOADS];
-      }
+      downloads = dJson.downloads || [];
       renderDownloads();
       updateCategoryBadges();
       updateTelemetryDock();
+      updateBentoBatchDock();
+    }
     }
 
     if (qRes.ok) {
@@ -1336,6 +1260,12 @@ function renderDownloads() {
     if (tbody) tbody.innerHTML = '';
     if (grid) grid.innerHTML = '';
     if (emptyState) emptyState.style.display = 'flex';
+    const checkAll = document.getElementById('check-all-downloads');
+    if (checkAll) {
+      checkAll.checked = false;
+      checkAll.indeterminate = false;
+    }
+    updateBentoBatchDock();
     return;
   }
   if (emptyState) emptyState.style.display = 'none';
@@ -1347,6 +1277,17 @@ function renderDownloads() {
     if (grid) grid.innerHTML = filtered.map(d => renderGridCard(d)).join('');
     attachGridEventListeners();
   }
+
+  // Update master select-all checkbox
+  const checkAll = document.getElementById('check-all-downloads');
+  if (checkAll) {
+    const allSelected = filtered.length > 0 && filtered.every(d => selectedTaskIds.has(d.id));
+    const someSelected = filtered.some(d => selectedTaskIds.has(d.id));
+    checkAll.checked = allSelected;
+    checkAll.indeterminate = !allSelected && someSelected;
+  }
+
+  updateBentoBatchDock();
 }
 
 function formatRowSpeed(d) {
@@ -1389,6 +1330,10 @@ function renderTableRow(d) {
   const sizeText = formatRowSize(d);
   const etaText = formatRowTimeLeft(d);
   const icon = getFileIcon(d.filename, d.category);
+  const supportsRange = d.supportsRange !== false;
+  const resumeBadge = supportsRange
+    ? `<span class="resumable-badge is-resumable" title="Server supports range requests (Resumable)">✓ Resume</span>`
+    : `<span class="resumable-badge is-non-resumable" title="Server does not support range requests (Non-resumable)">⚠ No Resume</span>`;
 
   let actionBtns = '';
   if (d.status === 'Downloading') {
@@ -1419,8 +1364,8 @@ function renderTableRow(d) {
 
   return `
     <tr data-id="${d.id}" class="${isSelected ? 'selected' : ''}">
-      <td style="text-align: center; display: none;">
-        <input type="checkbox" class="row-checkbox" ${isSelected ? 'checked' : ''} data-id="${d.id}">
+      <td style="text-align: center;">
+        <input type="checkbox" class="row-checkbox table-checkbox" ${isSelected ? 'checked' : ''} data-id="${d.id}">
       </td>
       <td>
         <div class="file-cell">
@@ -1430,6 +1375,9 @@ function renderTableRow(d) {
       </td>
       <td>
         <span class="status-text status-${d.status.toLowerCase()}">${d.status}</span>
+      </td>
+      <td style="text-align: center;">
+        ${resumeBadge}
       </td>
       <td>
         <div class="progress-cell-inline">
@@ -1458,18 +1406,26 @@ function renderGridCard(d) {
   const speedText = (d.status === 'Downloading' && d.speed > 0) ? formatSpeed(d.speed) : (d.status === 'Completed' ? 'Complete' : '—');
   const sizeText = formatSize(d.downloadedBytes || 0) + ' / ' + formatSize(d.totalSize || 0);
   const domain = extractDomain(d.url);
+  const supportsRange = d.supportsRange !== false;
+  const resumeBadge = supportsRange
+    ? `<span class="resumable-badge is-resumable" title="Server supports range requests (Resumable)">✓ Resume</span>`
+    : `<span class="resumable-badge is-non-resumable" title="Server does not support range requests (Non-resumable)">⚠ No Resume</span>`;
 
   return `
     <div class="grid-card ${isSelected ? 'selected' : ''}" data-id="${d.id}">
       <div class="grid-card-header">
         <div class="grid-card-identity">
+          <input type="checkbox" class="row-checkbox table-checkbox" ${isSelected ? 'checked' : ''} data-id="${d.id}" style="margin-right: 6px;">
           <div class="grid-card-icon">${icon}</div>
           <div class="grid-card-title-wrap">
             <h4 class="grid-card-title" title="${escapeHtml(d.filename)}">${escapeHtml(d.filename)}</h4>
             <span class="grid-card-domain">${escapeHtml(domain)}</span>
           </div>
         </div>
-        <span class="status-pill status-${d.status.toLowerCase()}">${d.status}</span>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          ${resumeBadge}
+          <span class="status-pill status-${d.status.toLowerCase()}">${d.status}</span>
+        </div>
       </div>
 
       <div class="grid-card-progress-wrap">
@@ -1505,33 +1461,57 @@ function attachRowEventListeners() {
   document.querySelectorAll('#downloads-tbody tr[data-id]').forEach(row => {
     const id = row.getAttribute('data-id');
 
-    // Row selection on click
+    // Row selection on click with Shift range and Ctrl multi-select
     row.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('input')) return;
-      if (e.ctrlKey || e.metaKey) {
+      const filtered = getFilteredDownloads();
+      const currentIdx = filtered.findIndex(d => d.id === id);
+
+      if (e.shiftKey && lastSelectedId) {
+        const lastIdx = filtered.findIndex(d => d.id === lastSelectedId);
+        if (lastIdx !== -1 && currentIdx !== -1) {
+          const start = Math.min(lastIdx, currentIdx);
+          const end = Math.max(lastIdx, currentIdx);
+          if (!e.ctrlKey && !e.metaKey) {
+            selectedTaskIds.clear();
+          }
+          for (let i = start; i <= end; i++) {
+            selectedTaskIds.add(filtered[i].id);
+          }
+        }
+      } else if (e.ctrlKey || e.metaKey) {
         if (selectedTaskIds.has(id)) {
           selectedTaskIds.delete(id);
         } else {
           selectedTaskIds.add(id);
+          lastSelectedId = id;
         }
       } else {
         if (selectedTaskIds.has(id) && selectedTaskIds.size === 1) {
           selectedTaskIds.clear();
+          lastSelectedId = null;
         } else {
           selectedTaskIds.clear();
           selectedTaskIds.add(id);
+          lastSelectedId = id;
         }
       }
       renderDownloads();
       updateTelemetryDock();
+      updateBentoBatchDock();
     });
 
     // Checkbox toggle
     row.querySelector('.row-checkbox')?.addEventListener('change', (e) => {
-      if (e.target.checked) selectedTaskIds.add(id);
-      else selectedTaskIds.delete(id);
+      if (e.target.checked) {
+        selectedTaskIds.add(id);
+        lastSelectedId = id;
+      } else {
+        selectedTaskIds.delete(id);
+      }
       renderDownloads();
       updateTelemetryDock();
+      updateBentoBatchDock();
     });
 
     // Double click to open completed file or inspect segments
@@ -1581,19 +1561,53 @@ function attachGridEventListeners() {
 
     card.addEventListener('click', (e) => {
       if (e.target.closest('button') || e.target.closest('input')) return;
-      if (e.ctrlKey || e.metaKey) {
-        if (selectedTaskIds.has(id)) selectedTaskIds.delete(id);
-        else selectedTaskIds.add(id);
+      const filtered = getFilteredDownloads();
+      const currentIdx = filtered.findIndex(d => d.id === id);
+
+      if (e.shiftKey && lastSelectedId) {
+        const lastIdx = filtered.findIndex(d => d.id === lastSelectedId);
+        if (lastIdx !== -1 && currentIdx !== -1) {
+          const start = Math.min(lastIdx, currentIdx);
+          const end = Math.max(lastIdx, currentIdx);
+          if (!e.ctrlKey && !e.metaKey) {
+            selectedTaskIds.clear();
+          }
+          for (let i = start; i <= end; i++) {
+            selectedTaskIds.add(filtered[i].id);
+          }
+        }
+      } else if (e.ctrlKey || e.metaKey) {
+        if (selectedTaskIds.has(id)) {
+          selectedTaskIds.delete(id);
+        } else {
+          selectedTaskIds.add(id);
+          lastSelectedId = id;
+        }
       } else {
         if (selectedTaskIds.has(id) && selectedTaskIds.size === 1) {
           selectedTaskIds.clear();
+          lastSelectedId = null;
         } else {
           selectedTaskIds.clear();
           selectedTaskIds.add(id);
+          lastSelectedId = id;
         }
       }
       renderDownloads();
       updateTelemetryDock();
+      updateBentoBatchDock();
+    });
+
+    card.querySelector('.row-checkbox')?.addEventListener('change', (e) => {
+      if (e.target.checked) {
+        selectedTaskIds.add(id);
+        lastSelectedId = id;
+      } else {
+        selectedTaskIds.delete(id);
+      }
+      renderDownloads();
+      updateTelemetryDock();
+      updateBentoBatchDock();
     });
 
     card.addEventListener('dblclick', (e) => {
@@ -1626,6 +1640,14 @@ function attachGridEventListeners() {
     });
     card.querySelector('[data-action="delete"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
+      downloadAction(id, 'delete');
+    });
+    card.querySelector('[data-action="inspect"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openSegmentVisualizer(id);
+    });
+  });
+}
       downloadAction(id, 'delete');
     });
     card.querySelector('[data-action="inspect"]')?.addEventListener('click', (e) => {
@@ -1692,22 +1714,6 @@ function updateLiveRowElements() {
 }
 
 function updateCategoryBadges() {
-  const isShowcase = downloads.some(d => d.id && d.id.startsWith('showcase-'));
-  if (isShowcase) {
-    document.getElementById('count-all') && (document.getElementById('count-all').textContent = '12');
-    document.getElementById('count-downloading') && (document.getElementById('count-downloading').textContent = '3');
-    document.getElementById('count-completed') && (document.getElementById('count-completed').textContent = '142');
-    document.getElementById('count-video') && (document.getElementById('count-video').textContent = '28');
-    document.getElementById('count-audio') && (document.getElementById('count-audio').textContent = '16');
-    document.getElementById('count-documents') && (document.getElementById('count-documents').textContent = '18');
-    document.getElementById('count-programs') && (document.getElementById('count-programs').textContent = '21');
-    document.getElementById('count-compressed') && (document.getElementById('count-compressed').textContent = '14');
-    document.getElementById('count-pictures') && (document.getElementById('count-pictures').textContent = '10');
-    document.getElementById('count-other') && (document.getElementById('count-other').textContent = '5');
-
-    return;
-  }
-
   const counts = {
     all: downloads.length,
     downloading: downloads.filter(d => d.status === 'Downloading' || d.status === 'Connecting' || d.status === 'Queued').length,
@@ -1776,10 +1782,51 @@ function populateQueueDropdowns() {
   });
 }
 
-// Actions API
+// Actions & Renewal API
+function openRenewUrlModal(task) {
+  if (!task) return;
+  currentRenewTaskId = task.id;
+  const filenameEl = document.getElementById('renew-filename');
+  const urlEl = document.getElementById('renew-url-input');
+  if (filenameEl) filenameEl.value = task.filename || '';
+  if (urlEl) {
+    urlEl.value = task.url || '';
+    setTimeout(() => {
+      urlEl.focus();
+      urlEl.select();
+    }, 120);
+  }
+  openModal('modal-renew-url');
+}
+
+async function executePauseDirect(id) {
+  const task = downloads.find(d => d.id === id);
+  const taskName = task ? `'${task.filename}'` : 'Download';
+  try {
+    const res = await fetch('/api/download/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action: 'pause' })
+    });
+    if (res.ok) {
+      showToast(`Paused non-resumable download: ${taskName}`, 'warning');
+      loadInitialData();
+    }
+  } catch (err) {
+    console.error('Pause non-resumable error:', err);
+  }
+}
+
 async function downloadAction(id, action) {
   const task = downloads.find(d => d.id === id);
   const taskName = task ? `'${task.filename}'` : 'Download';
+
+  // Smart Resumability check: if pausing a non-resumable download, warn user first
+  if (action === 'pause' && task && task.supportsRange === false) {
+    pendingPauseTaskId = id;
+    openModal('modal-pause-warning');
+    return;
+  }
 
   // Handle showcase tasks client-side for instant feedback
   if (id && id.startsWith('showcase-')) {
@@ -2022,6 +2069,69 @@ function initModals() {
     btnStartVideo.addEventListener('click', () => {
       closeModal('modal-video-downloader');
       showToast('Download started: Interstellar - Official Trailer (4K)', 'success');
+    });
+  }
+
+  // Renew URL Modal actions
+  const btnPasteRenewUrl = document.getElementById('btn-paste-renew-url');
+  if (btnPasteRenewUrl) {
+    btnPasteRenewUrl.addEventListener('click', async () => {
+      try {
+        const text = await readAppClipboard();
+        const extracted = extractUrlFromText(text);
+        if (extracted) {
+          const input = document.getElementById('renew-url-input');
+          if (input) input.value = extracted;
+          showToast('Fresh URL pasted from clipboard', 'info');
+        } else {
+          showToast('Clipboard does not contain a valid URL', 'warning');
+        }
+      } catch (_) {}
+    });
+  }
+
+  const btnSubmitRenew = document.getElementById('btn-submit-renew-url');
+  if (btnSubmitRenew) {
+    btnSubmitRenew.addEventListener('click', async () => {
+      const newUrl = document.getElementById('renew-url-input')?.value.trim();
+      if (!newUrl || !currentRenewTaskId) {
+        showToast('Please enter a valid URL', 'warning');
+        return;
+      }
+      try {
+        const res = await fetch('/api/download/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: currentRenewTaskId,
+            action: 'renew_url',
+            newUrl: newUrl
+          })
+        });
+        if (res.ok) {
+          showToast('Download URL renewed - resuming transfer', 'success');
+          closeModal('modal-renew-url');
+          loadInitialData();
+        } else {
+          showToast('Failed to renew download address', 'error');
+        }
+      } catch (err) {
+        console.error('Renew error:', err);
+        showToast('Network error updating download address', 'error');
+      }
+    });
+  }
+
+  // Non-resumable pause confirmation
+  const btnConfirmPause = document.getElementById('btn-confirm-pause-nonresumable');
+  if (btnConfirmPause) {
+    btnConfirmPause.addEventListener('click', () => {
+      if (pendingPauseTaskId) {
+        const id = pendingPauseTaskId;
+        pendingPauseTaskId = null;
+        closeModal('modal-pause-warning');
+        executePauseDirect(id);
+      }
     });
   }
 }
@@ -2412,7 +2522,7 @@ function populateSettingsForm(s) {
   document.getElementById('setting-min-intercept-mb').value = s.minInterceptSizeBytes ? Math.floor(s.minInterceptSizeBytes / 1048576) : 1;
   document.getElementById('setting-intercept-exts').value = (s.interceptExtensions || []).join(', ');
 
-  document.getElementById('setting-theme-picker').value = s.selectedTheme || 'nova';
+  document.getElementById('setting-theme-picker').value = (s.selectedTheme === 'light') ? 'light' : 'dark';
   document.getElementById('setting-proxy-mode').value = s.proxyMode || 'direct';
   document.getElementById('setting-proxy-url').value = s.proxyUrl || '';
 

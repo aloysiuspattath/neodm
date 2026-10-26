@@ -148,7 +148,16 @@ func TestDownloadActionsAPI(t *testing.T) {
 		t.Errorf("Expected filename updated.bin, got %s", task.Filename)
 	}
 
-	// 5. Delete
+	// 5. Renew URL
+	code = callAction(ActionReq{ID: task.ID, Action: "renew_url", NewURL: "http://example.com/fresh-token-123.bin"})
+	if code != http.StatusOK {
+		t.Errorf("Renew URL returned %d, expected 200", code)
+	}
+	if task.URL != "http://example.com/fresh-token-123.bin" {
+		t.Errorf("Expected URL to be renewed, got %s", task.URL)
+	}
+
+	// 6. Delete
 	code = callAction(ActionReq{ID: task.ID, Action: "delete"})
 	if code != http.StatusOK {
 		t.Errorf("Delete returned %d, expected 200", code)
@@ -323,6 +332,25 @@ func TestBatchActionsAPI(t *testing.T) {
 	srv.handleBatchAction(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Batch pause_all returned %d", rec.Code)
+	}
+
+	// Pause selected
+	tA := eng.GetAllTasks()[0]
+	body, _ = json.Marshal(BatchActionReq{Action: "pause_selected", IDs: []string{tA.ID}})
+	req = httptest.NewRequest("POST", "/api/download/batch_action", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	srv.handleBatchAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Batch pause_selected returned %d", rec.Code)
+	}
+
+	// Start selected
+	body, _ = json.Marshal(BatchActionReq{Action: "start_selected", IDs: []string{tA.ID}})
+	req = httptest.NewRequest("POST", "/api/download/batch_action", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	srv.handleBatchAction(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Batch start_selected returned %d", rec.Code)
 	}
 
 	// Resume all

@@ -22,7 +22,7 @@ type Settings struct {
 	MinInterceptSizeBytes     int64                   `json:"minInterceptSizeBytes"`
 	SoundAlertOnComplete      bool                    `json:"soundAlertOnComplete"`
 	DarkTheme                 bool                    `json:"darkTheme"`
-	SelectedTheme             string                  `json:"selectedTheme"` // "glass", "dracula", "cyberpunk", "light", "oled", "nord"
+	SelectedTheme             string                  `json:"selectedTheme"` // "dark" (Bento Dark), "light" (Bento Light)
 	StartMinimized            bool                    `json:"startMinimized"`
 	AutoOpenCompleted         bool                    `json:"autoOpenCompleted"`
 	NetworkBufferSize         int                     `json:"networkBufferSize"`
@@ -66,7 +66,7 @@ func DefaultSettings() *Settings {
 		MinInterceptSizeBytes: 1024 * 1024, // 1 MB default
 		SoundAlertOnComplete:  true,
 		DarkTheme:             true,
-		SelectedTheme:         "nova",
+		SelectedTheme:         "dark",
 		StartMinimized:        false,
 		AutoOpenCompleted:     false,
 		NetworkBufferSize:     262144, // 256 KB buffer

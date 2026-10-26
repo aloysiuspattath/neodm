@@ -461,6 +461,13 @@ func (t *Task) Start() {
 			conns = 1
 		}
 		t.segmentMgr = NewSegmentManager(t.TotalSize, conns)
+	} else if !t.SupportsRange {
+		// Non-resumable download restarting: reset single segment offset to 0
+		segments := t.segmentMgr.Segments()
+		if len(segments) > 0 {
+			atomic.StoreInt64(&segments[0].CurrentOffset, 0)
+			segments[0].Done = false
+		}
 	}
 
 	t.mu.Lock()

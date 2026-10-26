@@ -267,10 +267,13 @@ func (s *Server) handleDownloadAction(w http.ResponseWriter, r *http.Request) {
 		task.SetMaxConns(req.MaxConns)
 	case "move_queue":
 		task.SetQueue(req.QueueID)
-	case "edit":
+	case "edit", "renew_url":
 		if err := task.Edit(req.NewURL, req.Filename, req.SaveDir); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		if req.Action == "renew_url" {
+			task.Resume()
 		}
 	default:
 		http.Error(w, "Unknown action", http.StatusBadRequest)
@@ -284,8 +287,10 @@ func (s *Server) handleDownloadAction(w http.ResponseWriter, r *http.Request) {
 }
 
 type BatchActionReq struct {
-	Action string   `json:"action"` // "start_all", "pause_all", "delete_completed", "delete_selected"
-	IDs    []string `json:"ids,omitempty"`
+	Action     string   `json:"action"` // "start_all", "pause_all", "delete_completed", "delete_selected", "start_selected", "pause_selected", "move_queue_selected", "speed_limit_selected"
+	IDs        []string `json:"ids,omitempty"`
+	QueueID    string   `json:"queueId,omitempty"`
+	SpeedLimit int64    `json:"speedLimit,omitempty"`
 }
 
 func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
@@ -318,6 +323,36 @@ func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
 				if t != nil {
 					t.Pause()
 				}
+			}
+		}
+	case "start_selected", "resume_selected":
+		for _, id := range req.IDs {
+			t := s.engine.GetTask(id)
+			if t != nil {
+				t.Resume()
+			}
+		}
+	case "pause_selected":
+		for _, id := range req.IDs {
+			t := s.engine.GetTask(id)
+			if t != nil {
+				t.Pause()
+			}
+		}
+	case "move_queue_selected":
+		if req.QueueID != "" {
+			for _, id := range req.IDs {
+				t := s.engine.GetTask(id)
+				if t != nil {
+					t.SetQueue(req.QueueID)
+				}
+			}
+		}
+	case "speed_limit_selected":
+		for _, id := range req.IDs {
+			t := s.engine.GetTask(id)
+			if t != nil {
+				t.SetSpeedLimit(req.SpeedLimit)
 			}
 		}
 	case "delete_completed":
