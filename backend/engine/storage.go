@@ -2,8 +2,10 @@ package engine
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,25 +20,49 @@ type Storage struct {
 }
 
 // NewStorage creates or opens a pre-allocated storage file at partPath.
-func NewStorage(finalPath string, size int64, taskID string) (*Storage, error) {
+// If tempDirOpt is provided and non-empty, the in-progress part file is stored in that directory.
+func NewStorage(finalPath string, size int64, taskID string, tempDirOpt ...string) (*Storage, error) {
 	dir := filepath.Dir(finalPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	partPath := fmt.Sprintf("%s.%s.ifd_part", finalPath, taskID)
+	// 1. Verify destination free disk space
+	if err := CheckFreeDiskSpace(dir, size); err != nil {
+		return nil, err
+	}
 
-	// Open or create the part file
+	// 2. Determine partPath location
+	partDir := dir
+	if len(tempDirOpt) > 0 && strings.TrimSpace(tempDirOpt[0]) != "" {
+		customTemp := strings.TrimSpace(tempDirOpt[0])
+		if err := os.MkdirAll(customTemp, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create temporary directory %s: %w", customTemp, err)
+		}
+		if err := CheckFreeDiskSpace(customTemp, size); err != nil {
+			return nil, fmt.Errorf("temporary directory disk space error: %w", err)
+		}
+		partDir = customTemp
+	}
+
+	baseName := filepath.Base(finalPath)
+	partPath := filepath.Join(partDir, fmt.Sprintf("%s.%s.ifd_part", baseName, taskID))
+
+	// 3. Open or create the part file
 	file, err := os.OpenFile(partPath, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file %s: %w", partPath, err)
 	}
 
-	// Pre-allocate file size if known
+	// 4. Pre-allocate file size if known
 	if size > 0 {
 		currentInfo, err := file.Stat()
 		if err == nil && currentInfo.Size() < size {
-			_ = file.Truncate(size)
+			if truncErr := file.Truncate(size); truncErr != nil {
+				_ = file.Close()
+				_ = os.Remove(partPath)
+				return nil, fmt.Errorf("failed to pre-allocate %d bytes: %w", size, truncErr)
+			}
 		}
 	}
 
@@ -101,6 +127,7 @@ func (s *Storage) Finalize() (string, error) {
 		counter++
 	}
 
+	// 1. Fast path: Atomic rename (succeeds instantaneously when on same volume)
 	var renameErr error
 	for attempt := 0; attempt < 5; attempt++ {
 		renameErr = os.Rename(s.partPath, finalDest)
@@ -110,7 +137,38 @@ func (s *Storage) Finalize() (string, error) {
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	return "", fmt.Errorf("failed to finalize download to %s: %w", finalDest, renameErr)
+	// 2. Slow path: Cross-volume copy and delete (e.g. Temp on C:, Final on D:)
+	copyErr := copyAndDeleteFile(s.partPath, finalDest)
+	if copyErr != nil {
+		return "", fmt.Errorf("failed to finalize download to %s: %w (rename error: %v)", finalDest, copyErr, renameErr)
+	}
+
+	return finalDest, nil
+}
+
+func copyAndDeleteFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	buf := make([]byte, 1024*1024) // 1MB buffer for fast streaming transfer
+	if _, err := io.CopyBuffer(destFile, sourceFile, buf); err != nil {
+		_ = os.Remove(dst)
+		return err
+	}
+
+	_ = destFile.Sync()
+	_ = sourceFile.Close()
+	_ = destFile.Close()
+	return os.Remove(src)
 }
 
 // RemovePartFile removes the unfinished .ifd_part file on download cancellation.

@@ -529,3 +529,30 @@ func TestVideoEndpoints(t *testing.T) {
 		t.Errorf("Expected video task with Category Videos in engine")
 	}
 }
+
+func TestSystemDrivesAPI(t *testing.T) {
+	srv, _, tmpDir := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	req := httptest.NewRequest("GET", "/api/system/drives", nil)
+	rec := httptest.NewRecorder()
+	srv.handleSystemDrives(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleSystemDrives failed with %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var res struct {
+		Success bool                 `json:"success"`
+		Drives  []engine.DriveMetric `json:"drives"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("Failed to parse system drives response: %v", err)
+	}
+	if !res.Success {
+		t.Errorf("Expected success = true")
+	}
+	if len(res.Drives) == 0 {
+		t.Errorf("Expected at least 1 drive metric")
+	}
+}

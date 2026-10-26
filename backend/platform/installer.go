@@ -55,7 +55,7 @@ func InstallApp() error {
 		return err
 	}
 	sourceExe := currentExe
-	if strings.EqualFold(filepath.Base(currentExe), "NeoDM-Setup.exe") || strings.EqualFold(filepath.Base(currentExe), "IFD-Setup.exe") {
+	if strings.Contains(strings.ToLower(filepath.Base(currentExe)), "setup") {
 		candidate := filepath.Join(filepath.Dir(currentExe), "neodm.exe")
 		if _, err := os.Stat(candidate); err == nil {
 			sourceExe = candidate
@@ -74,6 +74,7 @@ func InstallApp() error {
 			return fmt.Errorf("failed to copy executable: %w", err)
 		}
 	}
+	_ = copyFile(targetExe, filepath.Join(installDir, "ifd.exe"))
 
 	// 2. Copy extension directory if available next to source executable
 	sourceExtDir := filepath.Join(filepath.Dir(currentExe), "extension")

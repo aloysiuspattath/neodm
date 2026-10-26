@@ -1287,8 +1287,8 @@ html, body {
 
 .file-title {
   font-size: 13px;
-  font-weight: 500;
-  color: #f8fafc;
+  font-weight: 600;
+  color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
   letter-spacing: -0.01em;
@@ -1645,14 +1645,26 @@ html, body {
 [data-theme="light"] .downloads-table tbody tr.selected {
   background: rgba(37, 99, 235, 0.08) !important;
 }
-[data-theme="light"] .row-filename {
+[data-theme="light"] .row-filename,
+[data-theme="light"] .file-title {
   color: #0f172a;
+  font-weight: 600;
 }
 [data-theme="light"] .row-filesize,
 [data-theme="light"] .row-status-text,
-[data-theme="light"] .row-speed,
 [data-theme="light"] .row-eta {
   color: #475569;
+}
+[data-theme="light"] .row-speed {
+  color: #2563eb;
+  font-weight: 600;
+}
+[data-theme="light"] .btn-action {
+  color: #334155;
+}
+[data-theme="light"] .btn-action:hover {
+  color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
 }
 [data-theme="light"] .search-pill {
   background: #ffffff;
@@ -2137,6 +2149,240 @@ textarea:focus {
   flex-direction: column;
   gap: 10px;
   margin-top: 6px;
+}
+
+/* Storage & Directory Settings */
+.settings-section-header {
+  margin-bottom: 6px;
+}
+
+.settings-section-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.storage-group-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.storage-field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.storage-label-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Host Drive Gauges Card */
+.storage-drives-card {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.storage-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.storage-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.storage-card-title svg {
+  color: var(--primary);
+}
+
+.drive-gauges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.drive-gauge-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s ease;
+}
+
+.drive-gauge-item:hover {
+  border-color: var(--border-highlight);
+}
+
+.drive-gauge-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drive-name-mount {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.drive-mount {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.drive-fs {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--badge-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.drive-free-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.drive-free-text.low {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.drive-free-text.critical {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.drive-progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.drive-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.drive-progress-fill.low {
+  background: var(--warning);
+}
+
+.drive-progress-fill.critical {
+  background: var(--danger);
+}
+
+.drive-warning-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-sm);
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.drive-warning-banner svg {
+  flex-shrink: 0;
+  color: #ef4444;
+}
+
+/* Fluent-style Switch Toggle */
+.fluent-switch-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.fluent-toggle-input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.fluent-toggle-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.fluent-switch-wrap:hover .fluent-toggle-label {
+  color: var(--text-main);
+}
+
+/* Storage Callout Card */
+.storage-callout-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+}
+
+.storage-callout-card .callout-icon {
+  font-size: 15px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+
+.storage-callout-card .callout-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.storage-callout-card .callout-text strong {
+  color: var(--text-main);
+}
+
+.btn-icon-only {
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+#temp-dir-input-group.disabled {
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 /* Queues & Scheduler Modal Layout */
@@ -2894,13 +3140,15 @@ textarea:focus {
 
 .bottom-telemetry-card {
   height: 68px;
-  background: #0f1523;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--telemetry-bg);
+  border: 1px solid var(--telemetry-border);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .telemetry-speed-block {
@@ -2913,14 +3161,14 @@ textarea:focus {
 .telemetry-label {
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-dim);
   letter-spacing: 0.02em;
 }
 
 .telemetry-speed-val {
   font-size: 22px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--text-main);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
@@ -2957,20 +3205,20 @@ textarea:focus {
 .telemetry-metric-col .metric-label {
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-dim);
 }
 
 .telemetry-metric-col .metric-val {
   font-size: 20px;
   font-weight: 700;
-  color: #f8fafc;
+  color: var(--text-main);
   font-variant-numeric: tabular-nums;
 }
 
 #telemetry-active-count,
 #telemetry-queued-count,
 #telemetry-completed-count {
-  color: #f8fafc;
+  color: var(--text-main);
 }
 
 /* Download Properties Modal Dialog (Matches Mockup) */

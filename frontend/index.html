@@ -1099,8 +1099,8 @@
           <button class="settings-tab-btn" data-tab="stab-bandwidth">
             <span class="stab-icon">📊</span> Bandwidth
           </button>
-          <button class="settings-tab-btn" data-tab="stab-categories">
-            <span class="stab-icon">📁</span> File Folders
+          <button class="settings-tab-btn" data-tab="stab-storage">
+            <span class="stab-icon">💾</span> Storage & Folders
           </button>
           <button class="settings-tab-btn" data-tab="stab-queues">
             <span class="stab-icon">⏰</span> Queues & Power
@@ -1134,13 +1134,6 @@
               <label for="setting-sound">Play sound alert on download completion</label>
             </div>
             <div class="form-group" style="margin-top: 16px;">
-              <label>Default Save Directory:</label>
-              <div class="input-with-button">
-                <input type="text" id="setting-default-dir">
-                <button class="btn btn-secondary" id="btn-browse-default-dir" type="button">Browse...</button>
-              </div>
-            </div>
-            <div class="form-group">
               <label>Action When Duplicate File Exists:</label>
               <select id="setting-duplicate-action">
                 <option value="rename">Automatically rename (e.g. file (1).zip)</option>
@@ -1198,12 +1191,81 @@
             </div>
           </div>
 
-          <!-- Pane 4: Categories & Folders -->
-          <div class="settings-pane" id="stab-categories">
-            <h3>Category Destination Folders</h3>
-            <p class="form-hint">Files are automatically sorted into these directories based on extension.</p>
-            <div class="category-folders-list" id="category-folders-container">
-              <!-- Dynamically populated inputs for Compressed, Documents, Videos, Music, Programs, Pictures -->
+          <!-- Pane 4: Storage & Folders (IDM-Style Segment Cache & Live Drive Gauges) -->
+          <div class="settings-pane" id="stab-storage">
+            <div class="settings-section-header">
+              <h3>Storage & Directory Locations</h3>
+              <p class="form-hint">Configure destination folders, multi-threaded segment caching, and monitor available drive capacity.</p>
+            </div>
+
+            <!-- Live Drive Capacity Gauges -->
+            <div class="storage-drives-card">
+              <div class="storage-card-header">
+                <div class="storage-card-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                  </svg>
+                  <span>Host Drive Capacity</span>
+                </div>
+                <button class="btn btn-xs btn-subtle" id="btn-refresh-drives" type="button" title="Refresh Drive Space">↻ Refresh</button>
+              </div>
+              <div class="drive-gauges-grid" id="drive-gauges-container">
+                <!-- Dynamically populated from /api/system/drives -->
+              </div>
+              <div class="drive-warning-banner" id="drive-low-space-banner" style="display: none;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span id="drive-warning-msg">Warning: Less than 5.0 GB free on target drive. Large downloads may stall.</span>
+              </div>
+            </div>
+
+            <!-- Section 1: Default Download Directory -->
+            <div class="form-group storage-group-block">
+              <label class="storage-field-label">Default Download Directory</label>
+              <div class="input-with-button">
+                <input type="text" id="setting-default-dir" placeholder="C:\Users\username\Downloads">
+                <button class="btn btn-secondary" id="btn-browse-default-dir" type="button">Browse...</button>
+                <button class="btn btn-secondary btn-icon-only" id="btn-open-default-dir" type="button" title="Open Folder in File Explorer">📂</button>
+              </div>
+              <span class="form-hint">Files without specific category rules will be saved directly to this path.</span>
+            </div>
+
+            <!-- Section 2: Temporary Directory (IDM-style segment caching) -->
+            <div class="form-group storage-group-block">
+              <div class="storage-label-toggle-row">
+                <label class="storage-field-label">Temporary Directory (Segment Caching)</label>
+                <div class="fluent-switch-wrap">
+                  <input type="checkbox" id="setting-use-target-for-temp" class="fluent-toggle-input">
+                  <label for="setting-use-target-for-temp" class="fluent-toggle-label">Use target download folder as temporary directory</label>
+                </div>
+              </div>
+              <div class="input-with-button" id="temp-dir-input-group">
+                <input type="text" id="setting-temp-dir" placeholder="D:\NeoDM_Temp">
+                <button class="btn btn-secondary" id="btn-browse-temp-dir" type="button">Browse...</button>
+              </div>
+              <div class="storage-callout-card">
+                <div class="callout-icon">💡</div>
+                <div class="callout-text">
+                  <strong>IDM-Style Segment Cache:</strong> When downloading large files, segments are written in parallel. 
+                  Enabling <em>"Use target download folder"</em> prevents filling up your C: drive when saving to D: or another volume. 
+                  If you prefer a fast dedicated scratch drive, specify its path above.
+                </div>
+              </div>
+            </div>
+
+            <!-- Section 3: Category Destination Folders -->
+            <div class="form-group storage-group-block">
+              <label class="storage-field-label">Category Destination Sub-Folders</label>
+              <p class="form-hint" style="margin-bottom: 10px;">Downloads are automatically organized into subfolders by file extension.</p>
+              <div class="category-folders-list" id="category-folders-container">
+                <!-- Dynamically populated inputs for Compressed, Documents, Videos, Music, Programs, Pictures -->
+              </div>
             </div>
           </div>
 

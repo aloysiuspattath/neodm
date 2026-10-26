@@ -15,6 +15,8 @@ type Settings struct {
 	MaxConnectionsPerDownload int                     `json:"maxConnectionsPerDownload"`
 	GlobalSpeedLimit          int64                   `json:"globalSpeedLimit"` // bytes/sec, 0 = unlimited
 	DefaultDownloadDir        string                  `json:"defaultDownloadDir"`
+	TemporaryDirectory        string                  `json:"temporaryDirectory,omitempty"`
+	UseTargetForTemp          bool                    `json:"useTargetForTemp"`
 	CategoryFolders           map[string]string       `json:"categoryFolders"`
 	AutoStart                 bool                    `json:"autoStart"`
 	AutoFetchEnabled          bool                    `json:"autoFetchEnabled"`
@@ -44,6 +46,8 @@ func DefaultSettings() *Settings {
 		MaxConnectionsPerDownload: 8,
 		GlobalSpeedLimit:          0,
 		DefaultDownloadDir:        downloadDir,
+		UseTargetForTemp:          true,
+		TemporaryDirectory:        "",
 		CategoryFolders: map[string]string{
 			"Compressed": filepath.Join(downloadDir, "Compressed"),
 			"Documents":  filepath.Join(downloadDir, "Documents"),
@@ -111,6 +115,7 @@ type Store struct {
 	recordsPath  string
 	Settings     *Settings
 	Records      map[string]*DownloadRecord
+	dirty        bool
 }
 
 // NewStoreWithPath initializes the data store at a custom directory path (for testing or isolation).
@@ -128,6 +133,23 @@ func NewStoreWithPath(dataDir string) (*Store, error) {
 	}
 
 	s.load()
+
+	// Background debounced flusher for telemetry updates
+	go func() {
+		ticker := time.NewTicker(2 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			s.mu.Lock()
+			if s.dirty {
+				s.dirty = false
+				s.mu.Unlock()
+				_ = s.SaveRecords()
+			} else {
+				s.mu.Unlock()
+			}
+		}
+	}()
+
 	return s, nil
 }
 
@@ -225,11 +247,20 @@ func (s *Store) SaveRecords() error {
 	return os.Rename(tmpFile, s.recordsPath)
 }
 
-// UpdateRecord updates or adds a record and persists to disk.
+// UpdateRecord updates or adds a record and persists to disk (debounced during streaming).
 func (s *Store) UpdateRecord(rec *DownloadRecord) {
 	s.mu.Lock()
 	s.Records[rec.ID] = rec
+
+	immediate := rec.Status == "Completed" || rec.Status == "Paused" || rec.Status == "Error" || rec.Status == "Queued"
+	if !immediate {
+		s.dirty = true
+		s.mu.Unlock()
+		return
+	}
+	s.dirty = false
 	s.mu.Unlock()
+
 	_ = s.SaveRecords()
 }
 

@@ -25,6 +25,7 @@ jobs:
       - name: Build Production Binaries
         run: |
           go build -ldflags="-s -w -H=windowsgui" -o neodm.exe main.go
+          go build -ldflags="-s -w -H=windowsgui" -o ifd.exe main.go
           go build -ldflags="-s -w" -o NovaDM-PRO-Setup.exe installer/main.go
 
       - name: Package Distribution Archives
@@ -37,6 +38,7 @@ jobs:
           $tempDir = "temp_portable"
           New-Item -ItemType Directory -Force -Path $tempDir
           Copy-Item neodm.exe $tempDir/
+          Copy-Item ifd.exe $tempDir/
           Copy-Item README.md $tempDir/
           Copy-Item LICENSE $tempDir/
           Copy-Item -Recurse extension $tempDir/extension

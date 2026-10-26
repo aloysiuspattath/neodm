@@ -9,6 +9,9 @@ import (
 )
 
 var (
+	procFreeConsole      = kernel32.NewProc("FreeConsole")
+	procGetConsoleWindow = kernel32.NewProc("GetConsoleWindow")
+
 	user32               = syscall.NewLazyDLL("user32.dll")
 	procShowWindow       = user32.NewProc("ShowWindow")
 	procIsZoomed         = user32.NewProc("IsZoomed")
@@ -23,6 +26,14 @@ var (
 	appHWND uintptr
 	hwndMu  sync.RWMutex
 )
+
+// DetachConsole immediately hides and frees any console window when in GUI mode.
+func DetachConsole() {
+	if hwnd, _, _ := procGetConsoleWindow.Call(); hwnd != 0 {
+		procShowWindow.Call(hwnd, 0) // SW_HIDE
+	}
+	procFreeConsole.Call()
+}
 
 const (
 	GWL_STYLE          = 0xFFFFFFF0 // -16 in 32-bit two's complement

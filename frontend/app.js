@@ -2139,6 +2139,42 @@ function initModals() {
   setupBrowseFolderButton('btn-browse-batch-dir', 'batch-savedir-input');
   setupBrowseFolderButton('btn-browse-torrent-dir', 'torrent-savedir-input');
   setupBrowseFolderButton('btn-browse-default-dir', 'setting-default-dir');
+  setupBrowseFolderButton('btn-browse-temp-dir', 'setting-temp-dir');
+
+  // Open default folder button
+  const btnOpenDefDir = document.getElementById('btn-open-default-dir');
+  if (btnOpenDefDir) {
+    btnOpenDefDir.addEventListener('click', async () => {
+      const dir = document.getElementById('setting-default-dir')?.value.trim();
+      if (!dir) return;
+      try {
+        await fetch('/api/tasks/open_folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: dir, type: 'folder' })
+        });
+      } catch (e) {
+        console.error('Open folder error:', e);
+      }
+    });
+  }
+
+  // Toggle Use Target for Temp Directory
+  const toggleUseTarget = document.getElementById('setting-use-target-for-temp');
+  if (toggleUseTarget) {
+    toggleUseTarget.addEventListener('change', (e) => {
+      const group = document.getElementById('temp-dir-input-group');
+      if (group) group.classList.toggle('disabled', e.target.checked);
+    });
+  }
+
+  // Refresh Drives Button
+  const btnRefreshDrives = document.getElementById('btn-refresh-drives');
+  if (btnRefreshDrives) {
+    btnRefreshDrives.addEventListener('click', () => {
+      fetchHostDrives();
+    });
+  }
 
   // Paste from Clipboard Button in Add Download dialog
   const btnPasteUrl = document.getElementById('btn-paste-url');
@@ -2203,6 +2239,9 @@ function initModals() {
       const paneId = btn.getAttribute('data-tab');
       const pane = document.getElementById(paneId);
       if (pane) pane.classList.add('active');
+      if (paneId === 'stab-storage') {
+        fetchHostDrives();
+      }
     });
   });
 
@@ -2862,6 +2901,66 @@ async function reorderTaskInQueue(queueId, index, direction) {
   }
 }
 
+// Host Drives Query & Capacity Monitoring
+async function fetchHostDrives() {
+  const container = document.getElementById('drive-gauges-container');
+  const banner = document.getElementById('drive-low-space-banner');
+  const bannerMsg = document.getElementById('drive-warning-msg');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/system/drives');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success || !Array.isArray(data.drives)) return;
+
+    container.innerHTML = '';
+    let criticalDrive = null;
+    let lowDrive = null;
+
+    data.drives.forEach(drive => {
+      const freeMB = drive.free_bytes / (1024 * 1024);
+      const isCritical = freeMB < 100; // < 100MB (User low disk space condition)
+      const isLow = freeMB < 5120;     // < 5GB
+
+      if (isCritical && !criticalDrive) criticalDrive = drive;
+      else if (isLow && !lowDrive) lowDrive = drive;
+
+      const card = document.createElement('div');
+      card.className = 'drive-gauge-item';
+      card.innerHTML = `
+        <div class="drive-gauge-top">
+          <div class="drive-name-mount">
+            <span class="drive-mount">${escapeHtml(drive.mount)}</span>
+            <span class="drive-fs">${escapeHtml(drive.fs || 'NTFS')}</span>
+          </div>
+          <div class="drive-free-text ${isCritical ? 'critical' : (isLow ? 'low' : '')}">
+            ${escapeHtml(drive.free_str || '0 B')} free of ${escapeHtml(drive.total_str || '0 B')}
+          </div>
+        </div>
+        <div class="drive-progress-track">
+          <div class="drive-progress-fill ${isCritical ? 'critical' : (isLow ? 'low' : '')}" style="width: ${Math.min(100, Math.max(2, drive.used_percent || 0))}%"></div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+    if (banner && bannerMsg) {
+      if (criticalDrive) {
+        banner.style.display = 'flex';
+        bannerMsg.innerHTML = `<strong>Critical:</strong> Drive <code>${escapeHtml(criticalDrive.mount)}</code> has only ${escapeHtml(criticalDrive.free_str)} remaining! Keep <em>"Use target download folder"</em> enabled so segments save directly to your destination drive without exhausting ${escapeHtml(criticalDrive.mount)}.`;
+      } else if (lowDrive) {
+        banner.style.display = 'flex';
+        bannerMsg.innerHTML = `<strong>Notice:</strong> Drive <code>${escapeHtml(lowDrive.mount)}</code> has only ${escapeHtml(lowDrive.free_str)} free space remaining.`;
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.error('Fetch host drives error:', err);
+  }
+}
+
 // Settings Modal Management
 async function openSettingsModal() {
   try {
@@ -2881,6 +2980,19 @@ function populateSettingsForm(s) {
   document.getElementById('setting-autoopen').checked = !!s.autoOpenCompleted;
   document.getElementById('setting-sound').checked = !!s.soundAlertOnComplete;
   document.getElementById('setting-default-dir').value = s.defaultDownloadDir || '';
+
+  const tempDirInput = document.getElementById('setting-temp-dir');
+  if (tempDirInput) tempDirInput.value = s.temporaryDirectory || '';
+  const useTargetToggle = document.getElementById('setting-use-target-for-temp');
+  const tempGroup = document.getElementById('temp-dir-input-group');
+  const useTargetVal = s.useTargetForTemp !== undefined ? !!s.useTargetForTemp : true;
+  if (useTargetToggle) {
+    useTargetToggle.checked = useTargetVal;
+    if (tempGroup) tempGroup.classList.toggle('disabled', useTargetVal);
+  }
+
+  fetchHostDrives();
+
   document.getElementById('setting-duplicate-action').value = s.duplicateFileAction || 'rename';
 
   document.getElementById('setting-max-concurrent').value = s.maxConcurrentDownloads || 4;
@@ -2957,6 +3069,8 @@ async function saveSettingsFromModal() {
     autoOpenCompleted: document.getElementById('setting-autoopen').checked,
     soundAlertOnComplete: document.getElementById('setting-sound').checked,
     defaultDownloadDir: document.getElementById('setting-default-dir').value.trim(),
+    temporaryDirectory: document.getElementById('setting-temp-dir')?.value.trim() || '',
+    useTargetForTemp: document.getElementById('setting-use-target-for-temp')?.checked ?? true,
     duplicateFileAction: document.getElementById('setting-duplicate-action').value,
     maxConcurrentDownloads: parseInt(document.getElementById('setting-max-concurrent').value, 10) || 4,
     maxConnectionsPerDownload: parseInt(document.getElementById('setting-max-conns').value, 10) || 8,

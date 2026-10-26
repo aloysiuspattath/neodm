@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -92,6 +93,8 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/settings", s.cors(s.handleSettings))
 	mux.HandleFunc("/api/open", s.cors(s.handleOpenFileOrFolder))
 	mux.HandleFunc("/api/select_folder", s.cors(s.handleSelectFolder))
+	mux.HandleFunc("/api/folder/select", s.cors(s.handleSelectFolder))
+	mux.HandleFunc("/api/system/drives", s.cors(s.handleSystemDrives))
 	mux.HandleFunc("/api/window/action", s.cors(s.handleWindowAction))
 	mux.HandleFunc("/api/clipboard/read", s.cors(s.handleReadClipboard))
 
@@ -721,7 +724,11 @@ func (s *Server) handleOpenFileOrFolder(w http.ResponseWriter, r *http.Request) 
 		cleanPath := filepath.Clean(req.Path)
 		var cmd *exec.Cmd
 		if req.Type == "folder" {
-			cmd = exec.Command("explorer", filepath.Dir(cleanPath))
+			if fi, err := os.Stat(cleanPath); err == nil && fi.IsDir() {
+				cmd = exec.Command("explorer", cleanPath)
+			} else {
+				cmd = exec.Command("explorer", filepath.Dir(cleanPath))
+			}
 		} else {
 			cmd = exec.Command("explorer", fmt.Sprintf("/select,%s", cleanPath))
 		}
@@ -781,5 +788,18 @@ func (s *Server) handleReadClipboard(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"text":    text,
+	})
+}
+
+func (s *Server) handleSystemDrives(w http.ResponseWriter, r *http.Request) {
+	drives, err := engine.GetDriveMetrics()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"drives":  drives,
 	})
 }

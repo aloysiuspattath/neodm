@@ -28,6 +28,9 @@ func main() {
 		return
 	}
 
+	// Immediately detach and hide any attached console window in GUI mode
+	platform.DetachConsole()
+
 	minimized := flag.Bool("minimized", false, "Start minimized in system tray")
 	port := flag.Int("port", 19765, "Local HTTP/WebSocket server port")
 	noGui := flag.Bool("nogui", false, "Run in headless daemon mode")
@@ -97,7 +100,6 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("NeoDM Engine listening on http://%s", addr)
 		if err := srv.StartWithListener(listener); err != nil {
 			log.Printf("Server stopped: %v", err)
 		}

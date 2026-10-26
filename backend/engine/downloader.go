@@ -417,7 +417,7 @@ func (e *Engine) checkQueue() {
 // Start initiates the download process.
 func (t *Task) Start() {
 	t.mu.Lock()
-	if t.Status != "Queued" && t.Status != "Paused" && t.Status != "Error" {
+	if t.Status != "Queued" {
 		t.mu.Unlock()
 		return
 	}
@@ -446,8 +446,12 @@ func (t *Task) Start() {
 		return
 	}
 
-	// Step 2: Initialize storage
-	storage, err := NewStorage(t.SavePath, t.TotalSize, t.ID)
+	// Step 2: Initialize storage with configurable temporary scratch directory
+	var tempDir string
+	if t.engine != nil && t.engine.store != nil && t.engine.store.Settings != nil && !t.engine.store.Settings.UseTargetForTemp {
+		tempDir = t.engine.store.Settings.TemporaryDirectory
+	}
+	storage, err := NewStorage(t.SavePath, t.TotalSize, t.ID, tempDir)
 	if err != nil {
 		t.fail(err)
 		return
@@ -783,16 +787,39 @@ func (t *Task) runWorker(seg *Segment, wg *sync.WaitGroup) {
 				_ = t.localLimiter.Wait(t.ctx, int64(len(buf)))
 			}
 
-			n, readErr := resp.Body.Read(buf)
+			cur := atomic.LoadInt64(&seg.CurrentOffset)
+
+			// Guard: If dynamic subdivision shortened our EndOffset, stop this connection cleanly
+			if seg.EndOffset >= 0 && cur > seg.EndOffset {
+				resp.Body.Close()
+				seg.Done = true
+				seg.Active = false
+				break
+			}
+
+			readBuf := buf
+			if seg.EndOffset >= 0 {
+				rem := seg.EndOffset - cur + 1
+				if rem > 0 && rem < int64(len(buf)) {
+					readBuf = buf[:rem]
+				}
+			}
+
+			n, readErr := resp.Body.Read(readBuf)
 			if n > 0 {
-				cur := atomic.LoadInt64(&seg.CurrentOffset)
-				if _, writeErr := t.storage.WriteAt(buf[:n], cur); writeErr != nil {
+				if _, writeErr := t.storage.WriteAt(readBuf[:n], cur); writeErr != nil {
 					seg.Error = writeErr.Error()
 					resp.Body.Close()
 					t.fail(fmt.Errorf("storage write error: %w", writeErr))
 					return
 				}
-				atomic.AddInt64(&seg.CurrentOffset, int64(n))
+				newCur := atomic.AddInt64(&seg.CurrentOffset, int64(n))
+				if seg.EndOffset >= 0 && newCur > seg.EndOffset {
+					resp.Body.Close()
+					seg.Done = true
+					seg.Active = false
+					break
+				}
 			}
 
 			if readErr != nil {
