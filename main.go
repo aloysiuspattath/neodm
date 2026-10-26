@@ -217,7 +217,7 @@ func openWebView(url string, startMinimized bool, onReady func(w webview2.WebVie
 			Title:  "Nova Download Manager PRO",
 			Width:  1100,
 			Height: 720,
-			IconId: 0,
+			IconId: 1,
 			Center: true,
 		},
 	})

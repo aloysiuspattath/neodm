@@ -466,6 +466,55 @@ async function batchAction(action, ids = null) {
     return;
   }
 
+  const isDemo = downloads.some(d => d.id && (d.id.startsWith('demo-') || d.id.startsWith('showcase-')));
+  if (isDemo) {
+    if (action === 'pause_all') {
+      downloads.forEach(d => { if (d.status === 'Downloading') { d.status = 'Paused'; d.speed = 0; } });
+      showToast('All active downloads paused');
+      renderDownloads();
+      updateTelemetryDock();
+      return;
+    }
+    if (action === 'start_all') {
+      downloads.forEach(d => { if (d.status === 'Paused' || d.status === 'Queued') { d.status = 'Downloading'; d.speed = 12400000; } });
+      showToast('All downloads resumed', 'success');
+      renderDownloads();
+      updateTelemetryDock();
+      return;
+    }
+    if (action === 'pause_selected') {
+      downloads.forEach(d => { if (selectedTaskIds.has(d.id) && d.status === 'Downloading') { d.status = 'Paused'; d.speed = 0; } });
+      showToast(`Paused ${selectedTaskIds.size} selected download(s)`);
+      renderDownloads();
+      updateTelemetryDock();
+      return;
+    }
+    if (action === 'start_selected') {
+      downloads.forEach(d => { if (selectedTaskIds.has(d.id)) { d.status = 'Downloading'; d.speed = 12400000; } });
+      showToast(`Started ${selectedTaskIds.size} selected download(s)`, 'success');
+      renderDownloads();
+      updateTelemetryDock();
+      return;
+    }
+    if (action === 'delete_selected') {
+      downloads = downloads.filter(d => !selectedTaskIds.has(d.id));
+      selectedTaskIds.clear();
+      lastSelectedId = null;
+      showToast('Removed selected downloads');
+      renderDownloads();
+      updateTelemetryDock();
+      updateBentoBatchDock();
+      return;
+    }
+    if (action === 'delete_completed') {
+      downloads = downloads.filter(d => d.status !== 'Completed');
+      showToast('Removed finished downloads from list');
+      renderDownloads();
+      updateTelemetryDock();
+      return;
+    }
+  }
+
   try {
     const res = await fetch('/api/download/batch_action', {
       method: 'POST',
@@ -1166,7 +1215,134 @@ function handleTelemetry(data) {
   }
 }
 
-const SHOWCASE_DOWNLOADS = [];
+const INITIAL_DEMO_DOWNLOADS = [
+  {
+    id: 'demo-1',
+    filename: 'ubuntu-24.04.2-desktop-amd64.iso',
+    status: 'Downloading',
+    percent: 62,
+    downloadedBytes: 2800000000,
+    totalSize: 4500000000,
+    speed: 12400000,
+    eta: 192,
+    timeLeft: '3m 12s',
+    category: 'Documents',
+    url: 'https://releases.ubuntu.com/24.04.2/ubuntu-24.04.2-desktop-amd64.iso',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-2',
+    filename: 'Adobe.Photoshop.2025.exe',
+    status: 'Downloading',
+    percent: 34,
+    downloadedBytes: 1200000000,
+    totalSize: 3400000000,
+    speed: 5600000,
+    eta: 401,
+    timeLeft: '6m 41s',
+    category: 'Programs',
+    url: 'https://creativecloud.adobe.com/downloads/Adobe.Photoshop.2025.exe',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-3',
+    filename: 'Interstellar.2014.1080p.BluRay.x264.mkv',
+    status: 'Downloading',
+    percent: 78,
+    downloadedBytes: 5600000000,
+    totalSize: 7100000000,
+    speed: 18900000,
+    eta: 63,
+    timeLeft: '1m 03s',
+    category: 'Videos',
+    url: 'https://archive.org/download/interstellar/Interstellar.2014.1080p.BluRay.x264.mkv',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-4',
+    filename: 'FigmaSetup.exe',
+    status: 'Queued',
+    percent: 0,
+    downloadedBytes: 0,
+    totalSize: 118 * 1024 * 1024,
+    speed: 0,
+    eta: 0,
+    timeLeft: '—',
+    category: 'Programs',
+    url: 'https://desktop.figma.com/win/FigmaSetup.exe',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-5',
+    filename: 'Clarity-Wallpapers.zip',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 432 * 1024 * 1024,
+    totalSize: 432 * 1024 * 1024,
+    speed: 0,
+    eta: 0,
+    timeLeft: 'Yesterday',
+    completedTime: 'Yesterday',
+    category: 'Compressed',
+    url: 'https://wallpapers.clarity.io/Clarity-Wallpapers.zip',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-6',
+    filename: 'React-Guide.pdf',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 12.4 * 1024 * 1024,
+    totalSize: 12.4 * 1024 * 1024,
+    speed: 0,
+    eta: 0,
+    timeLeft: 'Yesterday',
+    completedTime: 'Yesterday',
+    category: 'Documents',
+    url: 'https://react.dev/docs/React-Guide.pdf',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-7',
+    filename: 'Music Collection.zip',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 2.1 * 1024 * 1024 * 1024,
+    totalSize: 2.1 * 1024 * 1024 * 1024,
+    speed: 0,
+    eta: 0,
+    timeLeft: '2 days ago',
+    completedTime: '2 days ago',
+    category: 'Compressed',
+    url: 'https://archive.org/download/music_collection/Music%20Collection.zip',
+    queueId: 'main_queue',
+    supportsRange: true
+  },
+  {
+    id: 'demo-8',
+    filename: 'Sample Video.mp4',
+    status: 'Completed',
+    percent: 100,
+    downloadedBytes: 700 * 1024 * 1024,
+    totalSize: 700 * 1024 * 1024,
+    speed: 0,
+    eta: 0,
+    timeLeft: '3 days ago',
+    completedTime: '3 days ago',
+    category: 'Videos',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sample%20Video.mp4',
+    queueId: 'main_queue',
+    supportsRange: true
+  }
+];
+
+const SHOWCASE_DOWNLOADS = INITIAL_DEMO_DOWNLOADS;
 
 function getFileTypeLabel(filename, category) {
   const name = (filename || '').toLowerCase();
@@ -1191,12 +1367,16 @@ async function loadInitialData() {
 
     if (dRes.ok) {
       const dJson = await dRes.json();
-      downloads = dJson.downloads || [];
+      const backendDownloads = dJson.downloads || [];
+      if (backendDownloads.length > 0) {
+        downloads = backendDownloads;
+      } else {
+        downloads = [...INITIAL_DEMO_DOWNLOADS];
+      }
       renderDownloads();
       updateCategoryBadges();
       updateTelemetryDock();
       updateBentoBatchDock();
-    }
     }
 
     if (qRes.ok) {
@@ -1648,14 +1828,6 @@ function attachGridEventListeners() {
     });
   });
 }
-      downloadAction(id, 'delete');
-    });
-    card.querySelector('[data-action="inspect"]')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openSegmentVisualizer(id);
-    });
-  });
-}
 
 function updateLiveRowElements() {
   downloads.forEach(d => {
@@ -1828,8 +2000,8 @@ async function downloadAction(id, action) {
     return;
   }
 
-  // Handle showcase tasks client-side for instant feedback
-  if (id && id.startsWith('showcase-')) {
+  // Handle demo/showcase tasks client-side for instant tactile UI feedback
+  if (id && (id.startsWith('showcase-') || id.startsWith('demo-'))) {
     if (action === 'pause') {
       if (task) {
         task.status = 'Paused';

@@ -116,7 +116,7 @@ func PerformWindowAction(hwnd uintptr, action string) {
 		procPostMessage.Call(hwnd, uintptr(WM_CLOSE), 0, 0)
 	case "drag":
 		procReleaseCapture.Call()
-		procSendMessage.Call(hwnd, uintptr(WM_SYSCOMMAND), uintptr(SC_DRAGMOVE), 0)
 		procPostMessage.Call(hwnd, uintptr(WM_NCLBUTTONDOWN), uintptr(HTCAPTION), 0)
+		procPostMessage.Call(hwnd, uintptr(WM_SYSCOMMAND), uintptr(SC_DRAGMOVE), 0)
 	}
 }

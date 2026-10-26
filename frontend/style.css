@@ -31,14 +31,14 @@
   --text-dim: #64748b;
   --text-inverse: #090d16;
 
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-active: #4338ca;
-  --primary-glow: rgba(99, 102, 241, 0.35);
-  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  --primary: #0070f3;
+  --primary-hover: #0060df;
+  --primary-active: #0050cf;
+  --primary-glow: rgba(0, 112, 243, 0.4);
+  --primary-gradient: linear-gradient(135deg, #0070f3 0%, #0052cc 100%);
 
-  --accent: #818cf8;
-  --accent-cyan: #38bdf8;
+  --accent: #38bdf8;
+  --accent-cyan: #00f0ff;
   --bento-coral: #fb7185;
   --success: #10b981;
   --warning: #f59e0b;
@@ -92,13 +92,13 @@
   --text-dim: #94a3b8;
   --text-inverse: #ffffff;
 
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --primary-active: #4338ca;
-  --primary-glow: rgba(99, 102, 241, 0.25);
-  --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --primary: #0070f3;
+  --primary-hover: #0060df;
+  --primary-active: #0050cf;
+  --primary-glow: rgba(0, 112, 243, 0.25);
+  --primary-gradient: linear-gradient(135deg, #0070f3 0%, #0052cc 100%);
 
-  --accent: #4f46e5;
+  --accent: #0070f3;
   --accent-cyan: #0284c7;
   --bento-coral: #ff6b4a;
   --success: #10b981;
@@ -2290,24 +2290,24 @@ textarea:focus {
 .titlebar-logo-glass {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+  background: linear-gradient(135deg, #00f0ff 0%, #0070f3 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  color: var(--primary-glow);
+  color: #ffffff;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 [data-theme="light"] .titlebar-logo-glass {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 250, 0.7) 100%);
-  border: 1px solid rgba(0, 112, 243, 0.3);
-  box-shadow: 0 3px 8px rgba(0, 112, 243, 0.12), inset 0 1px 1px #ffffff;
-  color: #0070f3;
+  background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+  border: 1px solid rgba(0, 114, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3), inset 0 1px 1px #ffffff;
+  color: #ffffff;
 }
 
 .titlebar-logo-glass:hover {

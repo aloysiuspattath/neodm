@@ -238,6 +238,9 @@ func (tm *TrayManager) runMessageLoop() {
 	procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&exePathBuf[0])), uintptr(len(exePathBuf)))
 	hIcon, _, _ := procExtractIcon.Call(hInstance, uintptr(unsafe.Pointer(&exePathBuf[0])), 0)
 	if hIcon == 0 || hIcon == 1 {
+		hIcon, _, _ = procLoadIcon.Call(hInstance, uintptr(1))
+	}
+	if hIcon == 0 || hIcon == 1 {
 		hIcon, _, _ = procLoadIcon.Call(0, uintptr(IDI_APPLICATION))
 	}
 	tm.hIcon = hIcon
