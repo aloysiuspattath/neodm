@@ -58,9 +58,6 @@ func main() {
 			fmt.Println("Launching Neo Download Manager PRO...")
 		}
 		installedExe := filepath.Join(platform.GetInstallDir(), "neodm.exe")
-		if _, err := os.Stat(installedExe); os.IsNotExist(err) {
-			installedExe = filepath.Join(platform.GetInstallDir(), "ifd.exe")
-		}
 		launchCmd := exec.Command(installedExe)
 		launchCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		_ = launchCmd.Start()

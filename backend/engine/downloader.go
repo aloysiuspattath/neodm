@@ -621,7 +621,10 @@ func (t *Task) startYouTubeDownload() {
 	_ = os.MkdirAll(saveDir, 0755)
 
 	// Clean base filename without extension
-	baseFilename := strings.TrimSuffix(strings.TrimSuffix(t.Filename, ".mp4"), ".mp3")
+	baseFilename := t.Filename
+	for strings.HasSuffix(strings.ToLower(baseFilename), ".mp4") || strings.HasSuffix(strings.ToLower(baseFilename), ".mp3") || strings.HasSuffix(strings.ToLower(baseFilename), ".mkv") {
+		baseFilename = baseFilename[:len(baseFilename)-4]
+	}
 	baseFilename = strings.TrimPrefix(strings.TrimPrefix(baseFilename, "- "), "-")
 	baseFilename = strings.TrimSpace(baseFilename)
 	if baseFilename == "" || baseFilename == "video" || baseFilename == "YouTube_Video" || baseFilename == "watch" || baseFilename == "YouTube" || baseFilename == "- YouTube" || baseFilename == "downloaded_video" || strings.HasPrefix(baseFilename, "-") {

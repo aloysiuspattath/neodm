@@ -1432,6 +1432,16 @@ function getFileTypeLabel(filename, category) {
   return 'File';
 }
 
+// Global helper to safely normalize video/audio filename extensions without duplicate extensions (.mp4.mp4)
+function formatMediaFilename(name, isAudio) {
+  let clean = (name || 'video').trim();
+  clean = clean.replace(/\.(mp4|mkv|webm|avi|flv|mov|mp3|m4a|wav|aac)+$/gi, '');
+  clean = clean.replace(/\.(mp4|mkv|webm|avi|flv|mov|mp3|m4a|wav|aac)$/gi, '');
+  clean = clean.trim();
+  if (!clean) clean = isAudio ? 'audio_track' : 'video';
+  return isAudio ? `${clean}.mp3` : `${clean}.mp4`;
+}
+
 // Initial Data Load
 async function loadInitialData() {
   refreshBrowserExtensionInfo();
@@ -1465,6 +1475,7 @@ async function loadInitialData() {
     console.error('Initial load error:', e);
   }
 }
+window.fetchDownloads = loadInitialData;
 
 // Downloads Table / Grid Rendering
 function getFilteredDownloads() {
@@ -2495,15 +2506,8 @@ function initModals() {
             const fmt = (opt.getAttribute('data-format') || '').toLowerCase();
             const fnInput = document.getElementById('video-filename-input');
             if (fnInput && fnInput.value) {
-              let cur = fnInput.value.trim();
-              if (qual.startsWith('audio') || fmt === 'mp3') {
-                cur = cur.replace(/\.(mp4|mkv|webm|avi|flv)$/i, '') + '.mp3';
-                if (!cur.toLowerCase().endsWith('.mp3')) cur += '.mp3';
-              } else {
-                cur = cur.replace(/\.(mp3|m4a|wav|aac)$/i, '') + '.mp4';
-                if (!cur.toLowerCase().endsWith('.mp4')) cur += '.mp4';
-              }
-              fnInput.value = cur;
+              const isAud = qual.startsWith('audio') || fmt === 'mp3';
+              fnInput.value = formatMediaFilename(fnInput.value, isAud);
             }
           };
         }
@@ -2533,18 +2537,12 @@ function initModals() {
       const selectedOpt = qualitySelect ? qualitySelect.selectedOptions[0] : null;
       const downloadUrl = (selectedOpt && selectedOpt.value) ? selectedOpt.value : (currentVideoAnalysis ? currentVideoAnalysis.bestUrl : '');
       const quality = (selectedOpt && selectedOpt.getAttribute('data-quality')) ? selectedOpt.getAttribute('data-quality') : 'Default';
-      let filename = filenameInput ? filenameInput.value.trim() : 'video.mp4';
+      const rawFilename = filenameInput ? filenameInput.value.trim() : 'video.mp4';
       const saveDir = folderInput ? folderInput.value.trim() : '';
 
-      // Guarantee pristine file extension based on selected format
+      // Guarantee single pristine file extension (.mp4 or .mp3) without duplication
       const isAudio = quality.toLowerCase().startsWith('audio') || (selectedOpt && selectedOpt.getAttribute('data-format') === 'MP3');
-      if (isAudio) {
-        filename = filename.replace(/\.(mp4|mkv|webm|avi|flv)$/i, '') + '.mp3';
-        if (!filename.toLowerCase().endsWith('.mp3')) filename += '.mp3';
-      } else {
-        filename = filename.replace(/\.(mp3|m4a|wav|aac)$/i, '') + '.mp4';
-        if (!filename.toLowerCase().endsWith('.mp4')) filename += '.mp4';
-      }
+      const filename = formatMediaFilename(rawFilename, isAudio);
 
       if (!downloadUrl) {
         showToast('Please analyze a video stream first', 'warning');
@@ -2571,7 +2569,7 @@ function initModals() {
 
         closeModal('modal-video-downloader');
         showToast(`Started video capture: ${filename}`, 'success');
-        setTimeout(fetchDownloads, 200);
+        loadInitialData();
       } catch (err) {
         showToast(`Video capture error: ${err.message}`, 'error');
       } finally {

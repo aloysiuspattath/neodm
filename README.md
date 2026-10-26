@@ -66,7 +66,7 @@
 
 ## 💻 Command-Line Interface (CLI)
 
-The exact same binary (`neodm.exe` / `ifd.exe`) functions as a complete command-line download tool:
+The exact same binary (`neodm.exe`) functions as a complete command-line download tool:
 
 ```powershell
 # Rapid direct download

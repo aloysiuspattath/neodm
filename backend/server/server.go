@@ -676,18 +676,19 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 	downloadFilename := strings.TrimSpace(req.Filename)
 
 	isAudio := strings.HasPrefix(strings.ToLower(req.Quality), "audio") || strings.Contains(strings.ToLower(req.Quality), "audio only")
-	if isAudio {
+	for strings.HasSuffix(strings.ToLower(downloadFilename), ".mp4") || strings.HasSuffix(strings.ToLower(downloadFilename), ".mp3") || strings.HasSuffix(strings.ToLower(downloadFilename), ".mkv") {
 		if strings.HasSuffix(strings.ToLower(downloadFilename), ".mp4") {
-			downloadFilename = strings.TrimSuffix(downloadFilename, ".mp4") + ".mp3"
-		} else if !strings.HasSuffix(strings.ToLower(downloadFilename), ".mp3") {
-			downloadFilename = downloadFilename + ".mp3"
+			downloadFilename = downloadFilename[:len(downloadFilename)-4]
+		} else if strings.HasSuffix(strings.ToLower(downloadFilename), ".mp3") {
+			downloadFilename = downloadFilename[:len(downloadFilename)-4]
+		} else if strings.HasSuffix(strings.ToLower(downloadFilename), ".mkv") {
+			downloadFilename = downloadFilename[:len(downloadFilename)-4]
 		}
+	}
+	if isAudio {
+		downloadFilename = downloadFilename + ".mp3"
 	} else {
-		if strings.HasSuffix(strings.ToLower(downloadFilename), ".mp3") {
-			downloadFilename = strings.TrimSuffix(downloadFilename, ".mp3") + ".mp4"
-		} else if !strings.HasSuffix(strings.ToLower(downloadFilename), ".mp4") && !strings.HasSuffix(strings.ToLower(downloadFilename), ".mkv") {
-			downloadFilename = downloadFilename + ".mp4"
-		}
+		downloadFilename = downloadFilename + ".mp4"
 	}
 
 	saveDir := req.SaveDir
