@@ -556,3 +556,35 @@ func TestSystemDrivesAPI(t *testing.T) {
 		t.Errorf("Expected at least 1 drive metric")
 	}
 }
+
+func TestExtensionEndpoints(t *testing.T) {
+	srv, _, tmpDir := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	// 1. Test /api/extension/info
+	req := httptest.NewRequest("GET", "/api/extension/info", nil)
+	rec := httptest.NewRecorder()
+	srv.handleExtensionInfo(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleExtensionInfo failed with %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var infoRes struct {
+		Path   string `json:"path"`
+		Exists bool   `json:"exists"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &infoRes); err != nil {
+		t.Fatalf("Failed to parse extension info: %v", err)
+	}
+
+	// 2. Test /api/open with folder
+	openReqBody, _ := json.Marshal(OpenReq{Path: tmpDir, Type: "folder"})
+	reqOpen := httptest.NewRequest("POST", "/api/open", bytes.NewReader(openReqBody))
+	recOpen := httptest.NewRecorder()
+	srv.handleOpenFileOrFolder(recOpen, reqOpen)
+
+	if recOpen.Code != http.StatusOK {
+		t.Fatalf("handleOpenFileOrFolder failed with %d: %s", recOpen.Code, recOpen.Body.String())
+	}
+}

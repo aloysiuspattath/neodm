@@ -92,6 +92,9 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/video/download", s.cors(s.handleVideoDownload))
 	mux.HandleFunc("/api/settings", s.cors(s.handleSettings))
 	mux.HandleFunc("/api/open", s.cors(s.handleOpenFileOrFolder))
+	mux.HandleFunc("/api/extension/info", s.cors(s.handleExtensionInfo))
+	mux.HandleFunc("/api/extension/open", s.cors(s.handleExtensionOpen))
+	mux.HandleFunc("/api/extension/register", s.cors(s.handleExtensionRegister))
 	mux.HandleFunc("/api/select_folder", s.cors(s.handleSelectFolder))
 	mux.HandleFunc("/api/folder/select", s.cors(s.handleSelectFolder))
 	mux.HandleFunc("/api/system/drives", s.cors(s.handleSystemDrives))
@@ -698,6 +701,7 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	task.Category = "Videos"
+	task.StreamQuality = req.Quality
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -753,25 +757,90 @@ func (s *Server) handleOpenFileOrFolder(w http.ResponseWriter, r *http.Request) 
 		if req.Type == "folder" {
 			// If file exists on disk, reveal it and highlight in Windows Explorer
 			if fi, err := os.Stat(cleanPath); err == nil && !fi.IsDir() {
-				cmd := exec.Command("explorer.exe", fmt.Sprintf("/select,%s", cleanPath))
+				cmd := exec.Command("explorer.exe")
+				cmd.SysProcAttr = &syscall.SysProcAttr{
+					CmdLine: fmt.Sprintf(`explorer.exe /select,"%s"`, cleanPath),
+				}
 				_ = cmd.Start()
 			} else {
 				dir := cleanPath
 				if fi, err := os.Stat(cleanPath); err != nil || !fi.IsDir() {
 					dir = filepath.Dir(cleanPath)
 				}
-				cmd := exec.Command("explorer.exe", dir)
+				_ = os.MkdirAll(dir, 0755)
+				cmd := exec.Command("explorer.exe")
+				cmd.SysProcAttr = &syscall.SysProcAttr{
+					CmdLine: fmt.Sprintf(`explorer.exe "%s"`, dir),
+				}
 				_ = cmd.Start()
 			}
 		} else {
-			// Launch file with Windows default associated application
-			cmd := exec.Command("cmd", "/c", "start", "", cleanPath)
+			// Launch file with Windows default associated application silently
+			cmd := exec.Command("cmd.exe")
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				CmdLine:    fmt.Sprintf(`cmd.exe /c start "" "%s"`, cleanPath),
+				HideWindow: true,
+			}
 			_ = cmd.Start()
 		}
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+func (s *Server) handleExtensionInfo(w http.ResponseWriter, r *http.Request) {
+	extDir := platform.GetExtensionDir()
+	exists := false
+	if extDir != "" {
+		if _, err := os.Stat(filepath.Join(extDir, "manifest.json")); err == nil {
+			exists = true
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"path":   extDir,
+		"exists": exists,
+	})
+}
+
+func (s *Server) handleExtensionOpen(w http.ResponseWriter, r *http.Request) {
+	extDir := platform.GetExtensionDir()
+	if extDir != "" {
+		_ = os.MkdirAll(extDir, 0755)
+		manifest := filepath.Join(extDir, "manifest.json")
+		cmd := exec.Command("explorer.exe")
+		if _, err := os.Stat(manifest); err == nil {
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				CmdLine: fmt.Sprintf(`explorer.exe /select,"%s"`, manifest),
+			}
+		} else {
+			cmd.SysProcAttr = &syscall.SysProcAttr{
+				CmdLine: fmt.Sprintf(`explorer.exe "%s"`, extDir),
+			}
+		}
+		_ = cmd.Start()
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
+}
+
+func (s *Server) handleExtensionRegister(w http.ResponseWriter, r *http.Request) {
+	extDir := platform.GetExtensionDir()
+	err := platform.RegisterBrowserExtensions(extDir)
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Browser extension registered for Chrome, Edge, Brave, and Firefox.",
+	})
 }
 
 type WindowActionReq struct {

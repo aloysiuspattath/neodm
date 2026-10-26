@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -9,12 +10,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
+
+	"ifd/backend/grabber"
 )
 
 // Task represents an active or queued download job.
@@ -26,6 +32,7 @@ type Task struct {
 	SavePath      string
 	FinalPath     string
 	TotalSize     int64
+	DownloadedBytes int64
 	Status        string // Queued, Connecting, Downloading, Paused, Completed, Error
 	Category      string
 	QueueID       string
@@ -36,6 +43,7 @@ type Task struct {
 	Headers       map[string]string
 	MaxConns      int
 	SpeedLimit    int64 // per-task speed limit in bytes/sec, 0 = unlimited
+	StreamQuality string
 	CreatedAt     time.Time
 	CompletedAt   *time.Time
 	Error         string
@@ -434,6 +442,12 @@ func (t *Task) Start() {
 
 	t.engine.updateTask(t)
 
+	// Step 0: Intercept YouTube video streams and capture with full video + audio muxing via yt-dlp silently
+	if isYouTubeURL(t.URL) {
+		t.startYouTubeDownload()
+		return
+	}
+
 	// Step 1: Probe server capabilities
 	if err := t.probeServer(); err != nil {
 		if t.ctx.Err() != nil {
@@ -547,6 +561,217 @@ func (t *Task) Start() {
 			t.engine.checkQueue()
 		}
 	}
+}
+
+func isYouTubeURL(rawURL string) bool {
+	return strings.Contains(rawURL, "youtube.com/") || strings.Contains(rawURL, "youtu.be/")
+}
+
+func (t *Task) startYouTubeDownload() {
+	t.mu.Lock()
+	t.Status = "Downloading"
+	t.Error = ""
+	t.ctx, t.cancel = context.WithCancel(context.Background())
+	t.prevBytes = 0
+	t.prevTime = time.Now()
+	t.SupportsRange = true
+	t.mu.Unlock()
+	t.engine.updateTask(t)
+
+	ytdlp := grabber.GetYtDlpPath()
+	if ytdlp == "" {
+		var err error
+		ytdlp, err = grabber.EnsureYtDlp()
+		if err != nil {
+			t.fail(fmt.Errorf("yt-dlp helper unavailable: %w", err))
+			return
+		}
+	}
+
+	saveDir := filepath.Dir(t.SavePath)
+	if saveDir == "" || saveDir == "." {
+		if t.engine != nil && t.engine.store != nil && t.engine.store.Settings != nil {
+			saveDir = t.engine.store.Settings.DefaultDownloadDir
+		}
+	}
+	if saveDir == "" {
+		userProfile := os.Getenv("USERPROFILE")
+		if userProfile != "" {
+			saveDir = filepath.Join(userProfile, "Downloads")
+		} else {
+			saveDir = "downloads"
+		}
+	}
+	_ = os.MkdirAll(saveDir, 0755)
+
+	outTemplate := filepath.Join(saveDir, t.Filename)
+	if t.Filename == "" || strings.HasPrefix(t.Filename, "-") || strings.HasPrefix(t.Filename, "YouTube_Video_") {
+		outTemplate = filepath.Join(saveDir, "%(title)s.%(ext)s")
+	}
+
+	isAudioOnly := strings.Contains(strings.ToLower(t.StreamQuality), "audio") ||
+		strings.HasSuffix(strings.ToLower(t.Filename), ".mp3") ||
+		strings.HasSuffix(strings.ToLower(t.Filename), ".m4a")
+
+	var args []string
+	if isAudioOnly {
+		args = []string{
+			"-f", "bestaudio[ext=m4a]/bestaudio",
+			"-x",
+			"--audio-format", "mp3",
+			"--audio-quality", "0",
+			"--no-warnings",
+			"--newline",
+			"--progress-template", "download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
+			"-o", outTemplate,
+			t.URL,
+		}
+	} else {
+		formatArg := "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best"
+		if strings.Contains(t.StreamQuality, "720") {
+			formatArg = "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best"
+		} else if strings.Contains(t.StreamQuality, "480") {
+			formatArg = "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best"
+		} else if strings.Contains(t.StreamQuality, "360") {
+			formatArg = "18/best[height<=360]"
+		}
+
+		args = []string{
+			"-f", formatArg,
+			"--merge-output-format", "mp4",
+			"--no-warnings",
+			"--newline",
+			"--progress-template", "download:%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s",
+			"-o", outTemplate,
+			t.URL,
+		}
+	}
+
+	cmd := exec.CommandContext(t.ctx, ytdlp, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.fail(err)
+		return
+	}
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		t.fail(err)
+		return
+	}
+
+	var finalCreatedFile string
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "download:") {
+			parts := strings.Split(strings.TrimPrefix(line, "download:"), "|")
+			if len(parts) >= 5 {
+				downloaded, _ := strconv.ParseInt(parts[0], 10, 64)
+				total, _ := strconv.ParseInt(parts[1], 10, 64)
+				if total == 0 {
+					total, _ = strconv.ParseInt(parts[2], 10, 64)
+				}
+				speedFloat, _ := strconv.ParseFloat(parts[3], 64)
+				eta, _ := strconv.ParseInt(parts[4], 10, 64)
+
+				t.mu.Lock()
+				if downloaded > 0 {
+					t.DownloadedBytes = downloaded
+				}
+				if total > 0 {
+					t.TotalSize = total
+				}
+				if speedFloat > 0 {
+					t.Speed = int64(speedFloat)
+				}
+				if eta > 0 {
+					t.ETA = eta
+				}
+				t.mu.Unlock()
+				t.engine.updateTask(t)
+			}
+		} else if strings.Contains(line, "Destination:") || strings.Contains(line, "Merging formats into") {
+			re := regexp.MustCompile(`["'](.*?)["']`)
+			m := re.FindStringSubmatch(line)
+			if len(m) > 1 {
+				finalCreatedFile = m[1]
+			}
+		}
+	}
+
+	waitErr := cmd.Wait()
+
+	if t.ctx.Err() != nil {
+		t.mu.Lock()
+		t.Status = "Paused"
+		t.Speed = 0
+		t.ETA = 0
+		t.mu.Unlock()
+		t.engine.updateTask(t)
+		return
+	}
+
+	if waitErr != nil {
+		t.fail(fmt.Errorf("video capture failed: %w", waitErr))
+		return
+	}
+
+	// Locate final downloaded file
+	targetFile := t.SavePath
+	if finalCreatedFile != "" && isFile(finalCreatedFile) {
+		targetFile = finalCreatedFile
+	} else if !isFile(targetFile) {
+		base := strings.TrimSuffix(t.Filename, filepath.Ext(t.Filename))
+		cand := filepath.Join(saveDir, base+".mp4")
+		if isFile(cand) {
+			targetFile = cand
+		} else {
+			candM4a := filepath.Join(saveDir, base+".mp3")
+			if isFile(candM4a) {
+				targetFile = candM4a
+			}
+		}
+	}
+
+	t.mu.Lock()
+	t.FinalPath = targetFile
+	t.SavePath = targetFile
+	t.Filename = filepath.Base(targetFile)
+	t.Status = "Completed"
+	now := time.Now()
+	t.CompletedAt = &now
+	t.Speed = 0
+	t.ETA = 0
+	if fi, err := os.Stat(targetFile); err == nil {
+		t.TotalSize = fi.Size()
+		t.DownloadedBytes = fi.Size()
+	}
+	t.mu.Unlock()
+
+	t.engine.updateTask(t)
+	t.engine.mu.RLock()
+	completeCbs := make([]func(t *Task), len(t.engine.completeCallbacks))
+	copy(completeCbs, t.engine.completeCallbacks)
+	t.engine.mu.RUnlock()
+	for _, cb := range completeCbs {
+		cb(t)
+	}
+	if t.engine.QueueMgr != nil {
+		t.engine.QueueMgr.CheckQueueProgression(t)
+	} else {
+		t.engine.checkQueue()
+	}
+}
+
+func isFile(p string) bool {
+	if p == "" {
+		return false
+	}
+	fi, err := os.Stat(p)
+	return err == nil && !fi.IsDir()
 }
 
 // probeServer checks file size, range capability, and content disposition.
@@ -1071,7 +1296,7 @@ func (t *Task) ToRecord() *DownloadRecord {
 	defer t.mu.RUnlock()
 
 	var segments []*Segment
-	var downloaded int64 = 0
+	var downloaded int64 = t.DownloadedBytes
 	if t.segmentMgr != nil {
 		segments = t.segmentMgr.GetAll()
 		downloaded = t.segmentMgr.TotalDownloaded()

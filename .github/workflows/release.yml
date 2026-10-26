@@ -19,7 +19,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: '1.25'
           cache: true
 
       - name: Build Production Binaries
@@ -49,7 +49,7 @@ jobs:
           Compress-Archive -Path "extension/*" -DestinationPath dist/NeoDM-Browser-Extension.zip -Force
 
           # Generate SHA256 Checksums
-          Get-FileHash -Algorithm SHA256 (Get-ChildItem dist/*) | ForEach-Object { "$($_.Hash)  $(Split-Path $_.Path -Leaf)" } | Out-File -Encoding utf8 dist/SHA256SUMS.txt
+          Get-FileHash -Algorithm SHA256 (Get-ChildItem dist/*.exe, dist/*.zip) | ForEach-Object { "$($_.Hash)  $((Get-Item $_.Path).Name)" } | Set-Content -Encoding utf8 dist/SHA256SUMS.txt
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

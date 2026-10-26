@@ -9,6 +9,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"ifd/backend/cli"
@@ -34,25 +36,41 @@ func main() {
 	minimized := flag.Bool("minimized", false, "Start minimized in system tray")
 	port := flag.Int("port", 19765, "Local HTTP/WebSocket server port")
 	noGui := flag.Bool("nogui", false, "Run in headless daemon mode")
-	installFlag := flag.Bool("install", false, "Install IFD, create desktop/start shortcuts, and register uninstaller")
-	uninstallFlag := flag.Bool("uninstall", false, "Uninstall IFD and remove shortcuts")
+	installFlag := flag.Bool("install", false, "Install NeoDM, create desktop/start shortcuts, and register uninstaller")
+	uninstallFlag := flag.Bool("uninstall", false, "Uninstall NeoDM and remove shortcuts")
+	silentFlag := flag.Bool("silent", false, "Perform unattended silent installation or uninstallation")
 	flag.Parse()
+
+	exeName := strings.ToLower(filepath.Base(os.Args[0]))
+	isUninstall := *uninstallFlag || strings.Contains(exeName, "uninstall")
 
 	if *installFlag {
 		cli.AttachConsoleIfNeeded()
 		if err := platform.InstallApp(); err != nil {
 			log.Fatalf("Installation failed: %v", err)
 		}
-		fmt.Println("IFD installed successfully! Shortcuts created.")
+		fmt.Println("NeoDM installed successfully! Shortcuts created.")
 		return
 	}
 
-	if *uninstallFlag {
-		cli.AttachConsoleIfNeeded()
-		if err := platform.UninstallApp(); err != nil {
-			log.Fatalf("Uninstallation failed: %v", err)
+	if isUninstall {
+		if !*silentFlag && !*noGui {
+			confirmed := platform.ShowConfirmDialog("Uninstall Neo Download Manager PRO", "Are you sure you want to completely uninstall Neo Download Manager PRO (NeoDM) and remove all components?")
+			if !confirmed {
+				return
+			}
 		}
-		fmt.Println("IFD uninstalled successfully.")
+
+		if err := platform.UninstallApp(); err != nil {
+			if !*silentFlag && !*noGui {
+				platform.ShowInfoDialog("Uninstall Error", fmt.Sprintf("Uninstallation encountered an issue: %v", err))
+			}
+			return
+		}
+
+		if !*silentFlag && !*noGui {
+			platform.ShowInfoDialog("NeoDM Uninstalled", "Neo Download Manager PRO has been uninstalled successfully.")
+		}
 		return
 	}
 

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -166,6 +167,18 @@ func (va *VideoAnalyzer) analyzeDirectVideo(parsed *url.URL) (*VideoInfo, error)
 	return info, nil
 }
 
+// SilentCommand returns an *exec.Cmd with hidden console window on Windows
+func SilentCommand(name string, args ...string) *exec.Cmd {
+	cmd := exec.Command(name, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd
+}
+
+// IsYouTubeURL checks if the provided string is a YouTube page or short URL
+func IsYouTubeURL(rawURL string) bool {
+	return strings.Contains(rawURL, "youtube.com/") || strings.Contains(rawURL, "youtu.be/")
+}
+
 // GetYtDlpPath locates the yt-dlp executable on the system or in NeoDM app data.
 func GetYtDlpPath() string {
 	if p, err := exec.LookPath("yt-dlp"); err == nil {
@@ -268,8 +281,8 @@ func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, er
 	bestURL := ""
 
 	if ytdlp != "" {
-		// Run yt-dlp -j to get complete video metadata
-		cmd := exec.Command(ytdlp, "-j", "--no-warnings", pageURL)
+		// Run yt-dlp -j silently to extract complete video metadata with zero console windows
+		cmd := SilentCommand(ytdlp, "-j", "--no-warnings", pageURL)
 		if out, err := cmd.Output(); err == nil {
 			var ytData struct {
 				Title     string `json:"title"`
@@ -293,46 +306,45 @@ func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, er
 			}
 		}
 
-		// Extract direct stream URLs for popular resolutions
-		targetQualities := []struct {
-			label string
-			res   string
-			fmtID string
-			ext   string
-			size  string
-		}{
-			{"1080p (Full HD)", "1920x1080", "137", "MP4", "~77 MB"},
-			{"720p (High Definition)", "1280x720", "136", "MP4", "~25 MB"},
-			{"480p (Standard Definition)", "854x480", "135", "MP4", "~13 MB"},
-			{"360p (Medium)", "640x360", "18", "MP4", "~8 MB"},
-			{"Audio Only (High Quality)", "Audio", "140", "M4A", "~3.3 MB"},
+		// Provide crystal-clear presets with full video + audio muxing
+		formats = []VideoFormat{
+			{
+				Quality:    "1080p (Full HD - Video + Audio)",
+				Resolution: "1920x1080",
+				Format:     "MP4",
+				SizeText:   "Best Quality",
+				URL:        pageURL,
+			},
+			{
+				Quality:    "720p (High Definition - Video + Audio)",
+				Resolution: "1280x720",
+				Format:     "MP4",
+				SizeText:   "Standard HD",
+				URL:        pageURL,
+			},
+			{
+				Quality:    "480p (Standard Definition)",
+				Resolution: "854x480",
+				Format:     "MP4",
+				SizeText:   "Balanced",
+				URL:        pageURL,
+			},
+			{
+				Quality:    "360p (Fast Download)",
+				Resolution: "640x360",
+				Format:     "MP4",
+				SizeText:   "Small Size",
+				URL:        pageURL,
+			},
+			{
+				Quality:    "Audio Only (High Quality MP3 / M4A)",
+				Resolution: "Audio",
+				Format:     "MP3",
+				SizeText:   "Audio Track",
+				URL:        pageURL,
+			},
 		}
-
-		for _, tq := range targetQualities {
-			gCmd := exec.Command(ytdlp, "-g", "-f", tq.fmtID, pageURL)
-			if gOut, gErr := gCmd.Output(); gErr == nil {
-				streamURL := ""
-				for _, line := range strings.Split(string(gOut), "\n") {
-					line = strings.TrimSpace(line)
-					if strings.HasPrefix(line, "http") {
-						streamURL = line
-						break
-					}
-				}
-				if streamURL != "" {
-					if bestURL == "" {
-						bestURL = streamURL
-					}
-					formats = append(formats, VideoFormat{
-						Quality:    tq.label,
-						Resolution: tq.res,
-						Format:     tq.ext,
-						SizeText:   tq.size,
-						URL:        streamURL,
-					})
-				}
-			}
-		}
+		bestURL = pageURL
 	}
 
 	cleanFilename := sanitizeVideoTitle(title)

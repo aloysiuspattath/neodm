@@ -294,7 +294,10 @@ function initNavigationAndToolbar() {
 
   // Tools nav
   const toolBrowser = document.getElementById('tool-browser-integration');
-  if (toolBrowser) toolBrowser.addEventListener('click', () => openModal('modal-browser-integration'));
+  if (toolBrowser) toolBrowser.addEventListener('click', () => {
+    refreshBrowserExtensionInfo();
+    openModal('modal-browser-integration');
+  });
 
   const toolVideo = document.getElementById('tool-video-downloader');
   if (toolVideo) toolVideo.addEventListener('click', () => openVideoDownloaderModal());
@@ -1378,6 +1381,7 @@ function getFileTypeLabel(filename, category) {
 
 // Initial Data Load
 async function loadInitialData() {
+  refreshBrowserExtensionInfo();
   try {
     const [dRes, qRes] = await Promise.all([
       fetch('/api/downloads'),
@@ -2555,6 +2559,66 @@ function initModals() {
       }
     });
   }
+
+  // Browser Extension Action Handlers
+  document.getElementById('btn-copy-ext-path')?.addEventListener('click', async () => {
+    if (window._extensionPath) {
+      try {
+        await navigator.clipboard.writeText(window._extensionPath);
+        showToast('Extension folder path copied to clipboard!', 'success');
+      } catch (_) {
+        showToast(window._extensionPath, 'info');
+      }
+    } else {
+      showToast('Extension path not detected yet', 'warning');
+    }
+  });
+
+  const handleOpenExtFolder = async () => {
+    try {
+      await fetch('/api/extension/open', { method: 'POST' });
+      showToast('Opening extension folder in Windows Explorer', 'info');
+    } catch (e) {
+      showToast('Failed to open extension folder', 'error');
+    }
+  };
+  document.getElementById('btn-open-ext-folder')?.addEventListener('click', handleOpenExtFolder);
+  document.getElementById('btn-settings-open-ext-folder')?.addEventListener('click', handleOpenExtFolder);
+
+  const handleRegisterExtBrowsers = async () => {
+    try {
+      const res = await fetch('/api/extension/register', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Extension registered in Chrome, Edge, Brave & Firefox!', 'success');
+        const st = document.getElementById('extension-register-status');
+        if (st) st.textContent = 'Registered in Windows Registry ✓';
+      } else {
+        showToast(`Registration: ${data.error || 'Failed'}`, 'warning');
+      }
+    } catch (e) {
+      showToast(`Registration error: ${e.message}`, 'error');
+    }
+  };
+  document.getElementById('btn-register-browsers')?.addEventListener('click', handleRegisterExtBrowsers);
+  document.getElementById('btn-settings-register-browsers')?.addEventListener('click', handleRegisterExtBrowsers);
+}
+
+async function refreshBrowserExtensionInfo() {
+  try {
+    const res = await fetch('/api/extension/info');
+    if (res.ok) {
+      const data = await res.json();
+      const pathEl = document.getElementById('browser-extension-path-display');
+      const settingsPathEl = document.getElementById('settings-browser-ext-path');
+      const displayPath = data.path || 'Not detected (running outside installed root)';
+      if (pathEl) pathEl.textContent = displayPath;
+      if (settingsPathEl) settingsPathEl.textContent = displayPath;
+      window._extensionPath = data.path;
+    }
+  } catch (err) {
+    console.error('Failed to get extension info:', err);
+  }
 }
 
 function switchAddTab(tabId) {
@@ -2963,6 +3027,7 @@ async function fetchHostDrives() {
 
 // Settings Modal Management
 async function openSettingsModal() {
+  refreshBrowserExtensionInfo();
   try {
     const res = await fetch('/api/settings');
     if (res.ok) {

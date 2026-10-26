@@ -48,7 +48,8 @@ func main() {
 		fmt.Println("✓ Neo Download Manager PRO installed successfully!")
 		fmt.Println("✓ Desktop shortcut created")
 		fmt.Println("✓ Start Menu shortcut created")
-		fmt.Println("✓ Windows Add/Remove Programs entry registered")
+		fmt.Println("✓ Browser Companion Extension installed & registered (Chrome, Edge, Brave, Firefox)")
+		fmt.Println("✓ Windows Add/Remove Programs entry & uninstaller (uninstall.exe) registered")
 	}
 
 	// Launch installed app if requested

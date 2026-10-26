@@ -8,11 +8,47 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/windows/registry"
 )
 
-const uninstallRegKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\NeoDM`
+const (
+	uninstallRegKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\NeoDM`
+	extensionID     = "neodmdownloadmanagerproaccelerat"
+	chromeExtKey    = `Software\Google\Chrome\Extensions\` + extensionID
+	edgeExtKey      = `Software\Microsoft\Edge\Extensions\` + extensionID
+	braveExtKey     = `Software\BraveSoftware\Brave-Browser\Extensions\` + extensionID
+	firefoxExtKey   = `Software\Mozilla\Firefox\Extensions`
+)
+
+var (
+	user32DLL       = syscall.NewLazyDLL("user32.dll")
+	procMessageBoxW = user32DLL.NewProc("MessageBoxW")
+)
+
+const (
+	MB_OK              = 0x00000000
+	MB_YESNO           = 0x00000004
+	MB_ICONQUESTION    = 0x00000020
+	MB_ICONINFORMATION = 0x00000040
+	IDYES              = 6
+)
+
+// ShowConfirmDialog displays a native Windows confirmation dialog (Yes/No)
+func ShowConfirmDialog(title, message string) bool {
+	t, _ := syscall.UTF16PtrFromString(title)
+	m, _ := syscall.UTF16PtrFromString(message)
+	ret, _, _ := procMessageBoxW.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), uintptr(MB_YESNO|MB_ICONQUESTION))
+	return ret == IDYES
+}
+
+// ShowInfoDialog displays a native Windows info message box
+func ShowInfoDialog(title, message string) {
+	t, _ := syscall.UTF16PtrFromString(title)
+	m, _ := syscall.UTF16PtrFromString(message)
+	_, _, _ = procMessageBoxW.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), uintptr(MB_OK|MB_ICONINFORMATION))
+}
 
 // GetInstallDir returns default user-level installation path: %LOCALAPPDATA%\Programs\NeoDM
 func GetInstallDir() string {
@@ -22,6 +58,84 @@ func GetInstallDir() string {
 		return filepath.Join(home, "AppData", "Local", "Programs", "NeoDM")
 	}
 	return filepath.Join(localAppData, "Programs", "NeoDM")
+}
+
+// GetExtensionDir finds the installed or local extension directory
+func GetExtensionDir() string {
+	// 1. Next to current running executable
+	if exe, err := os.Executable(); err == nil {
+		ext := filepath.Join(filepath.Dir(exe), "extension")
+		if fi, err := os.Stat(ext); err == nil && fi.IsDir() {
+			return ext
+		}
+	}
+	// 2. In install dir
+	instExt := filepath.Join(GetInstallDir(), "extension")
+	if fi, err := os.Stat(instExt); err == nil && fi.IsDir() {
+		return instExt
+	}
+	// 3. Fallback to current working directory
+	if fi, err := os.Stat("extension"); err == nil && fi.IsDir() {
+		if abs, err := filepath.Abs("extension"); err == nil {
+			return abs
+		}
+	}
+	return ""
+}
+
+// RegisterBrowserExtensions registers extension paths with Chrome, Edge, Brave, and Firefox
+func RegisterBrowserExtensions(extDir string) error {
+	if extDir == "" {
+		extDir = GetExtensionDir()
+	}
+	if extDir == "" {
+		return fmt.Errorf("extension directory not found")
+	}
+
+	manifestPath := filepath.Join(extDir, "manifest.json")
+	if _, err := os.Stat(manifestPath); err != nil {
+		return fmt.Errorf("manifest.json not found in %s", extDir)
+	}
+
+	// 1. Chrome
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, chromeExtKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("path", extDir)
+		_ = k.SetStringValue("version", "1.0.0")
+		k.Close()
+	}
+
+	// 2. Microsoft Edge
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, edgeExtKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("path", extDir)
+		_ = k.SetStringValue("version", "1.0.0")
+		k.Close()
+	}
+
+	// 3. Brave
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, braveExtKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("path", extDir)
+		_ = k.SetStringValue("version", "1.0.0")
+		k.Close()
+	}
+
+	// 4. Firefox
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, firefoxExtKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("neodm-extension@neodm.io", extDir)
+		k.Close()
+	}
+
+	return nil
+}
+
+// UnregisterBrowserExtensions removes browser extension registry entries
+func UnregisterBrowserExtensions() {
+	_ = registry.DeleteKey(registry.CURRENT_USER, chromeExtKey)
+	_ = registry.DeleteKey(registry.CURRENT_USER, edgeExtKey)
+	_ = registry.DeleteKey(registry.CURRENT_USER, braveExtKey)
+	if k, err := registry.OpenKey(registry.CURRENT_USER, firefoxExtKey, registry.SET_VALUE); err == nil {
+		_ = k.DeleteValue("neodm-extension@neodm.io")
+		k.Close()
+	}
 }
 
 // CreateShortcut creates a Windows .lnk shortcut via WScript.Shell COM
@@ -75,12 +189,17 @@ func InstallApp() error {
 		}
 	}
 	_ = copyFile(targetExe, filepath.Join(installDir, "ifd.exe"))
+	_ = copyFile(targetExe, filepath.Join(installDir, "uninstall.exe"))
 
 	// 2. Copy extension directory if available next to source executable
 	sourceExtDir := filepath.Join(filepath.Dir(currentExe), "extension")
+	if _, err := os.Stat(sourceExtDir); os.IsNotExist(err) {
+		sourceExtDir = "extension"
+	}
 	targetExtDir := filepath.Join(installDir, "extension")
-	if _, err := os.Stat(sourceExtDir); err == nil {
+	if fi, err := os.Stat(sourceExtDir); err == nil && fi.IsDir() {
 		_ = copyDir(sourceExtDir, targetExtDir)
+		_ = RegisterBrowserExtensions(targetExtDir)
 	}
 
 	// 3. Create Start Menu shortcut
@@ -103,7 +222,8 @@ func InstallApp() error {
 		_ = k.SetStringValue("Publisher", "NeoDM Team")
 		_ = k.SetStringValue("InstallLocation", installDir)
 		_ = k.SetStringValue("DisplayIcon", targetExe)
-		_ = k.SetStringValue("UninstallString", fmt.Sprintf(`"%s" --uninstall`, targetExe))
+		_ = k.SetStringValue("UninstallString", fmt.Sprintf(`"%s"`, filepath.Join(installDir, "uninstall.exe")))
+		_ = k.SetStringValue("QuietUninstallString", fmt.Sprintf(`"%s" --silent`, filepath.Join(installDir, "uninstall.exe")))
 		_ = k.SetDWordValue("NoModify", 1)
 		_ = k.SetDWordValue("NoRepair", 1)
 	}
@@ -113,13 +233,16 @@ func InstallApp() error {
 
 // UninstallApp removes shortcuts, registry keys, and program directory
 func UninstallApp() error {
-	// 1. Remove Registry Key
+	// 1. Unregister Browser Extensions
+	UnregisterBrowserExtensions()
+
+	// 2. Remove Registry Key
 	_ = registry.DeleteKey(registry.CURRENT_USER, uninstallRegKey)
 
-	// 2. Remove Startup entry
+	// 3. Remove Startup entry
 	_ = SetAutoStart(false)
 
-	// 3. Remove Start Menu & Desktop shortcuts
+	// 4. Remove Start Menu & Desktop shortcuts
 	appData := os.Getenv("APPDATA")
 	startMenuDir := filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs")
 	_ = os.Remove(filepath.Join(startMenuDir, "Neo Download Manager PRO.lnk"))
@@ -130,9 +253,9 @@ func UninstallApp() error {
 	_ = os.Remove(filepath.Join(desktopDir, "Neo Download Manager PRO.lnk"))
 	_ = os.Remove(filepath.Join(desktopDir, "IFD.lnk"))
 
-	// 4. Schedule directory removal after exit via PowerShell
+	// 5. Schedule directory removal after exit via PowerShell
 	installDir := GetInstallDir()
-	psScript := fmt.Sprintf(`Start-Sleep -Seconds 1; Remove-Item -Recurse -Force '%s'`, installDir)
+	psScript := fmt.Sprintf(`Start-Sleep -Seconds 2; Remove-Item -Recurse -Force '%s'`, installDir)
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psScript)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = cmd.Start()

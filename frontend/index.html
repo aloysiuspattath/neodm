@@ -1055,22 +1055,31 @@
       </div>
       <div class="modal-body">
         <div class="integration-guide-card">
-          <h4>Google Chrome & Microsoft Edge</h4>
+          <h4>Google Chrome, Microsoft Edge & Brave</h4>
           <ol class="guide-steps">
-            <li>Open <code>chrome://extensions</code> in your browser.</li>
-            <li>Enable <strong>Developer mode</strong> in the top-right toggle.</li>
-            <li>Click <strong>Load unpacked</strong> and select the directory:
-              <div class="code-box"><code>d:\new projects\ifd\extension</code></div>
+            <li>Extension Directory on Disk:
+              <div class="code-box" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                <code id="browser-extension-path-display">Detecting path...</code>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+                <button class="btn btn-secondary btn-sm" id="btn-copy-ext-path" type="button">📋 Copy Path</button>
+                <button class="btn btn-secondary btn-sm" id="btn-open-ext-folder" type="button">📂 Open Folder in Explorer</button>
+                <button class="btn btn-secondary btn-sm" id="btn-register-browsers" type="button">⚡ Auto-Register with Browsers</button>
+              </div>
             </li>
-            <li>The NeoDM extension icon will appear in your browser toolbar with automatic 1-click capture!</li>
+            <li>In your browser, visit <code id="browser-ext-url-chrome">chrome://extensions</code> or <code>edge://extensions</code></li>
+            <li>Enable <strong>Developer mode</strong> (toggle in top-right corner).</li>
+            <li>Click <strong>Load unpacked</strong> and paste or select the extension folder above!</li>
+            <li>NeoDM extension icon will appear in your toolbar with instant 1-click download capture and video sniffing!</li>
           </ol>
         </div>
         <div class="integration-guide-card" style="margin-top: 12px;">
-          <h4>Firefox</h4>
-          <p>Open <code>about:debugging#/runtime/this-firefox</code> and load the manifest from <code>extension\manifest.json</code>.</p>
+          <h4>Mozilla Firefox</h4>
+          <p>Open <code>about:debugging#/runtime/this-firefox</code>, click <strong>Load Temporary Add-on</strong>, and select <code>manifest.json</code> from the extension folder.</p>
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="extension-register-status" style="font-size: 12px; color: var(--text-muted);">Ready to connect</span>
         <button class="btn btn-primary" onclick="closeModal('modal-browser-integration')">Got It</button>
       </div>
     </div>
@@ -1305,6 +1314,17 @@
             <div class="form-group">
               <label>Monitored File Extensions (comma separated):</label>
               <textarea id="setting-intercept-exts" rows="3" class="form-textarea"></textarea>
+            </div>
+            <div class="form-group storage-group-block" style="margin-top: 16px;">
+              <label class="storage-field-label">Browser Companion Extension Installation</label>
+              <p class="form-hint">Location of the extension files to load or register with your browser.</p>
+              <div class="code-box" style="margin: 8px 0;">
+                <code id="settings-browser-ext-path">Detecting extension folder...</code>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-secondary btn-sm" id="btn-settings-open-ext-folder" type="button">📂 Open Folder in Explorer</button>
+                <button class="btn btn-secondary btn-sm" id="btn-settings-register-browsers" type="button">⚡ Auto-Register with Browsers</button>
+              </div>
             </div>
           </div>
 
