@@ -80,6 +80,16 @@ func GetClipboardText() string {
 	return getClipboardText()
 }
 
+// SetClipboardText places plain text into the Windows clipboard.
+func SetClipboardText(text string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	safeText := strings.ReplaceAll(text, "'", "''")
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", "Set-Clipboard -Value '"+safeText+"'")
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.Run()
+}
+
 func getClipboardTextNative() (string, bool) {
 	var opened bool
 	for i := 0; i < 5; i++ {

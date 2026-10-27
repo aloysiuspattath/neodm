@@ -10,7 +10,7 @@ import (
 const runKeyPath = `Software\Microsoft\Windows\CurrentVersion\Run`
 const appName = "NeoDM"
 
-// SetAutoStart configures IFD to launch at Windows login.
+// SetAutoStart configures NeoDM to launch at Windows login.
 func SetAutoStart(enable bool) error {
 	k, err := registry.OpenKey(registry.CURRENT_USER, runKeyPath, registry.SET_VALUE)
 	if err != nil {
@@ -36,7 +36,7 @@ func SetAutoStart(enable bool) error {
 	return nil
 }
 
-// IsAutoStartEnabled checks if IFD is registered in Windows Startup.
+// IsAutoStartEnabled checks if NeoDM is registered in Windows Startup.
 func IsAutoStartEnabled() bool {
 	k, err := registry.OpenKey(registry.CURRENT_USER, runKeyPath, registry.QUERY_VALUE)
 	if err != nil {

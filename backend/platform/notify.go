@@ -22,7 +22,7 @@ $textNodes = $xml.GetElementsByTagName("text")
 $textNodes.Item(0).AppendChild($xml.CreateTextNode("%s")) > $null
 $textNodes.Item(1).AppendChild($xml.CreateTextNode("%s")) > $null
 $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("IFD")
+$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("NeoDM.DownloadManager.Pro.1.0")
 $notifier.Show($toast)
 `, safeTitle, safeMsg)
 

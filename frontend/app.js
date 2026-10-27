@@ -2684,14 +2684,36 @@ function initModals() {
   document.getElementById('btn-open-ext-folder')?.addEventListener('click', handleOpenExtFolder);
   document.getElementById('btn-settings-open-ext-folder')?.addEventListener('click', handleOpenExtFolder);
 
+  const handleLaunchBrowser = async (browserName) => {
+    try {
+      const res = await fetch('/api/extension/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ browser: browserName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message || `Launched ${browserName} with NeoDM extension!`, 'success');
+      } else {
+        showToast(data.error || `Could not launch ${browserName}`, 'warning');
+      }
+    } catch (e) {
+      showToast(`Launch error: ${e.message}`, 'error');
+    }
+  };
+  document.getElementById('btn-launch-chrome')?.addEventListener('click', () => handleLaunchBrowser('chrome'));
+  document.getElementById('btn-launch-edge')?.addEventListener('click', () => handleLaunchBrowser('edge'));
+  document.getElementById('btn-launch-brave')?.addEventListener('click', () => handleLaunchBrowser('brave'));
+
   const handleRegisterExtBrowsers = async () => {
     try {
       const res = await fetch('/api/extension/register', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        showToast('Extension registered in Chrome, Edge, Brave & Firefox!', 'success');
+        showToast('Registered in registry & path copied to clipboard!', 'success');
         const st = document.getElementById('extension-register-status');
-        if (st) st.textContent = 'Registered in Windows Registry ✓';
+        if (st) st.textContent = 'Registered in Registry ✓ Path copied to clipboard';
+        await fetch('/api/extension/open', { method: 'POST' });
       } else {
         showToast(`Registration: ${data.error || 'Failed'}`, 'warning');
       }

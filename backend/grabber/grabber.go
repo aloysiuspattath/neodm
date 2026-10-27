@@ -97,7 +97,7 @@ func (g *SiteGrabber) Crawl(opts GrabberOptions) ([]*GrabbedLink, error) {
 		if err != nil {
 			return
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 NeoDM/1.1")
 		for k, v := range opts.CustomHeaders {
 			req.Header.Set(k, v)
 		}
@@ -193,7 +193,7 @@ func (g *SiteGrabber) Crawl(opts GrabberOptions) ([]*GrabbedLink, error) {
 
 				req, err := http.NewRequest("HEAD", item.URL, nil)
 				if err == nil {
-					req.Header.Set("User-Agent", "Mozilla/5.0 IFD/1.0")
+					req.Header.Set("User-Agent", "Mozilla/5.0 NeoDM/1.1")
 					resp, err := g.client.Do(req)
 					if err == nil {
 						item.Size = resp.ContentLength

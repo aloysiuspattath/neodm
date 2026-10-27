@@ -92,7 +92,7 @@ const (
 	ICON_BIG   = 1
 )
 
-// RegisterAppHWND sets the active window handle for IFD.
+// RegisterAppHWND sets the active window handle for NeoDM.
 func RegisterAppHWND(hwnd uintptr) {
 	hwndMu.Lock()
 	defer hwndMu.Unlock()

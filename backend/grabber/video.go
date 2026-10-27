@@ -530,7 +530,7 @@ func (va *VideoAnalyzer) analyzeYouTube(pageURL, videoID string) (*VideoInfo, er
 func (va *VideoAnalyzer) analyzeVimeo(pageURL, videoID string) (*VideoInfo, error) {
 	oembedURL := fmt.Sprintf("https://vimeo.com/api/oembed.json?url=https://vimeo.com/%s", videoID)
 	req, _ := http.NewRequest("GET", oembedURL, nil)
-	req.Header.Set("User-Agent", "Mozilla/5.0 IFD/1.0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 NeoDM/1.1")
 
 	title := "Vimeo Video"
 	author := "Vimeo Creator"

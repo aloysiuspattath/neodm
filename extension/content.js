@@ -1,4 +1,4 @@
-// IFD Media Stream Sniffer (Content Script)
+// NeoDM Media Stream Sniffer (Content Script)
 
 (function () {
   const detectedMedia = new Set();
@@ -19,15 +19,15 @@
   }
 
   function injectDownloadPill(targetEl, mediaUrl) {
-    if (document.getElementById(`ifd-pill-${hash(mediaUrl)}`)) return;
+    if (document.getElementById(`neodm-pill-${hash(mediaUrl)}`)) return;
 
     const pill = document.createElement('div');
-    pill.id = `ifd-pill-${hash(mediaUrl)}`;
-    pill.className = 'ifd-media-pill';
+    pill.id = `neodm-pill-${hash(mediaUrl)}`;
+    pill.className = 'neodm-media-pill';
     pill.innerHTML = `
-      <div class="ifd-pill-btn">
-        <span class="ifd-pill-icon">⚡</span>
-        <span class="ifd-pill-text">Download with IFD</span>
+      <div class="neodm-pill-btn">
+        <span class="neodm-pill-icon">⚡</span>
+        <span class="neodm-pill-text">Download with NeoDM</span>
       </div>
     `;
 
@@ -39,7 +39,7 @@
         url: mediaUrl,
         title: document.title || 'media_stream'
       }, () => {
-        pill.innerHTML = `<span class="ifd-pill-text">✓ Sent to IFD</span>`;
+        pill.innerHTML = `<span class="neodm-pill-text">✓ Sent to NeoDM</span>`;
         setTimeout(() => pill.remove(), 2000);
       });
     });
@@ -50,7 +50,7 @@
       zIndex: '2147483647',
       cursor: 'pointer',
       backgroundColor: '#0f172a',
-      color: '#06b6d4',
+      color: '#38bdf8',
       border: '1px solid #334155',
       borderRadius: '20px',
       padding: '4px 10px',
@@ -69,7 +69,7 @@
       const rect = targetEl.getBoundingClientRect();
       if (rect.width > 120 && rect.height > 80) {
         pill.style.top = `${Math.max(10, window.scrollY + rect.top + 10)}px`;
-        pill.style.left = `${Math.max(10, window.scrollX + rect.right - 160)}px`;
+        pill.style.left = `${Math.max(10, window.scrollX + rect.right - 180)}px`;
       } else {
         pill.style.position = 'fixed';
         pill.style.top = '16px';

@@ -14,12 +14,17 @@ import (
 )
 
 const (
-	uninstallRegKey = `Software\Microsoft\Windows\CurrentVersion\Uninstall\NeoDM`
-	extensionID     = "neodmdownloadmanagerproaccelerat"
-	chromeExtKey    = `Software\Google\Chrome\Extensions\` + extensionID
-	edgeExtKey      = `Software\Microsoft\Edge\Extensions\` + extensionID
-	braveExtKey     = `Software\BraveSoftware\Brave-Browser\Extensions\` + extensionID
-	firefoxExtKey   = `Software\Mozilla\Firefox\Extensions`
+	uninstallRegKey  = `Software\Microsoft\Windows\CurrentVersion\Uninstall\NeoDM`
+	extensionID      = "neodmdownloadmanagerproaccelerat"
+	nativeHostName   = "com.neodm.downloader"
+	chromeExtKey     = `Software\Google\Chrome\Extensions\` + extensionID
+	edgeExtKey       = `Software\Microsoft\Edge\Extensions\` + extensionID
+	braveExtKey      = `Software\BraveSoftware\Brave-Browser\Extensions\` + extensionID
+	firefoxExtKey    = `Software\Mozilla\Firefox\Extensions`
+	chromeNativeKey  = `Software\Google\Chrome\NativeMessagingHosts\` + nativeHostName
+	edgeNativeKey    = `Software\Microsoft\Edge\NativeMessagingHosts\` + nativeHostName
+	braveNativeKey   = `Software\BraveSoftware\Brave-Browser\NativeMessagingHosts\` + nativeHostName
+	firefoxNativeKey = `Software\Mozilla\NativeMessagingHosts\` + nativeHostName
 )
 
 var (
@@ -97,37 +102,74 @@ func RegisterBrowserExtensions(extDir string) error {
 		return fmt.Errorf("manifest.json not found in %s", extDir)
 	}
 
-	// 1. Chrome
+	// 1. Write Native Messaging Host JSON definition
+	exePath, _ := os.Executable()
+	if exePath == "" {
+		exePath = filepath.Join(GetInstallDir(), "neodm.exe")
+	}
+	absExe, _ := filepath.Abs(exePath)
+
+	hostJSONPath := filepath.Join(extDir, nativeHostName+".json")
+	nativeJSON := fmt.Sprintf(`{
+  "name": "%s",
+  "description": "Neo Download Manager PRO Native Messaging Host",
+  "path": "%s",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://%s/",
+    "chrome-extension://*",
+    "moz-extension://*"
+  ]
+}`, nativeHostName, strings.ReplaceAll(absExe, `\`, `\\`), extensionID)
+
+	_ = os.WriteFile(hostJSONPath, []byte(nativeJSON), 0644)
+
+	// 2. Register Native Messaging Host in Registry
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, chromeNativeKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("", hostJSONPath)
+		k.Close()
+	}
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, edgeNativeKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("", hostJSONPath)
+		k.Close()
+	}
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, braveNativeKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("", hostJSONPath)
+		k.Close()
+	}
+	if k, _, err := registry.CreateKey(registry.CURRENT_USER, firefoxNativeKey, registry.SET_VALUE); err == nil {
+		_ = k.SetStringValue("", hostJSONPath)
+		k.Close()
+	}
+
+	// 3. Register Extension Keys
 	if k, _, err := registry.CreateKey(registry.CURRENT_USER, chromeExtKey, registry.SET_VALUE); err == nil {
 		_ = k.SetStringValue("path", extDir)
-		_ = k.SetStringValue("version", "1.0.0")
+		_ = k.SetStringValue("version", "1.1.0")
 		k.Close()
 	}
-
-	// 2. Microsoft Edge
 	if k, _, err := registry.CreateKey(registry.CURRENT_USER, edgeExtKey, registry.SET_VALUE); err == nil {
 		_ = k.SetStringValue("path", extDir)
-		_ = k.SetStringValue("version", "1.0.0")
+		_ = k.SetStringValue("version", "1.1.0")
 		k.Close()
 	}
-
-	// 3. Brave
 	if k, _, err := registry.CreateKey(registry.CURRENT_USER, braveExtKey, registry.SET_VALUE); err == nil {
 		_ = k.SetStringValue("path", extDir)
-		_ = k.SetStringValue("version", "1.0.0")
+		_ = k.SetStringValue("version", "1.1.0")
 		k.Close()
 	}
-
-	// 4. Firefox
 	if k, _, err := registry.CreateKey(registry.CURRENT_USER, firefoxExtKey, registry.SET_VALUE); err == nil {
 		_ = k.SetStringValue("neodm-extension@neodm.io", extDir)
 		k.Close()
 	}
 
+	// 4. Copy extension path to Windows clipboard for instant 1-click paste
+	_ = SetClipboardText(extDir)
+
 	return nil
 }
 
-// UnregisterBrowserExtensions removes browser extension registry entries
+// UnregisterBrowserExtensions removes browser extension and native messaging registry entries
 func UnregisterBrowserExtensions() {
 	_ = registry.DeleteKey(registry.CURRENT_USER, chromeExtKey)
 	_ = registry.DeleteKey(registry.CURRENT_USER, edgeExtKey)
@@ -136,6 +178,83 @@ func UnregisterBrowserExtensions() {
 		_ = k.DeleteValue("neodm-extension@neodm.io")
 		k.Close()
 	}
+	_ = registry.DeleteKey(registry.CURRENT_USER, chromeNativeKey)
+	_ = registry.DeleteKey(registry.CURRENT_USER, edgeNativeKey)
+	_ = registry.DeleteKey(registry.CURRENT_USER, braveNativeKey)
+	_ = registry.DeleteKey(registry.CURRENT_USER, firefoxNativeKey)
+}
+
+// FindBrowserExe locates browser executables on Windows
+func FindBrowserExe(browser string) string {
+	b := strings.ToLower(browser)
+	localApp := os.Getenv("LOCALAPPDATA")
+	programFiles := os.Getenv("ProgramFiles")
+	programFilesX86 := os.Getenv("ProgramFiles(x86)")
+
+	var candidates []string
+	switch b {
+	case "chrome":
+		candidates = []string{
+			filepath.Join(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(localApp, "Google", "Chrome", "Application", "chrome.exe"),
+		}
+	case "edge":
+		candidates = []string{
+			filepath.Join(programFilesX86, "Microsoft", "Edge", "Application", "msedge.exe"),
+			filepath.Join(programFiles, "Microsoft", "Edge", "Application", "msedge.exe"),
+		}
+	case "brave":
+		candidates = []string{
+			filepath.Join(programFiles, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+			filepath.Join(localApp, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+			filepath.Join(programFilesX86, "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+		}
+	case "firefox":
+		candidates = []string{
+			filepath.Join(programFiles, "Mozilla Firefox", "firefox.exe"),
+			filepath.Join(programFilesX86, "Mozilla Firefox", "firefox.exe"),
+		}
+	}
+
+	for _, p := range candidates {
+		if p != "" {
+			if fi, err := os.Stat(p); err == nil && !fi.IsDir() {
+				return p
+			}
+		}
+	}
+	return ""
+}
+
+// LaunchBrowserWithExtension launches a browser with the unpacked extension preloaded
+func LaunchBrowserWithExtension(browser string, extDir string) error {
+	if extDir == "" {
+		extDir = GetExtensionDir()
+	}
+	if extDir == "" {
+		return fmt.Errorf("extension directory not found")
+	}
+
+	// Always place path on clipboard
+	_ = SetClipboardText(extDir)
+
+	exe := FindBrowserExe(browser)
+	if exe == "" {
+		return fmt.Errorf("%s executable not found on system", browser)
+	}
+
+	b := strings.ToLower(browser)
+	var cmd *exec.Cmd
+	if b == "firefox" {
+		cmd = exec.Command(exe, "about:debugging#/runtime/this-firefox")
+	} else {
+		// Chromium browsers (Chrome, Edge, Brave) support --load-extension
+		cmd = exec.Command(exe, "--load-extension="+extDir, "chrome://extensions")
+	}
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
+	return cmd.Start()
 }
 
 // CreateShortcut creates a Windows .lnk shortcut via WScript.Shell COM

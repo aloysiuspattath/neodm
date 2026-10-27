@@ -97,6 +97,7 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/extension/info", s.cors(s.handleExtensionInfo))
 	mux.HandleFunc("/api/extension/open", s.cors(s.handleExtensionOpen))
 	mux.HandleFunc("/api/extension/register", s.cors(s.handleExtensionRegister))
+	mux.HandleFunc("/api/extension/launch", s.cors(s.handleExtensionLaunch))
 	mux.HandleFunc("/api/select_folder", s.cors(s.handleSelectFolder))
 	mux.HandleFunc("/api/folder/select", s.cors(s.handleSelectFolder))
 	mux.HandleFunc("/api/system/drives", s.cors(s.handleSystemDrives))
@@ -963,6 +964,36 @@ func (s *Server) handleExtensionRegister(w http.ResponseWriter, r *http.Request)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "Browser extension registered for Chrome, Edge, Brave, and Firefox.",
+		"path":    extDir,
+	})
+}
+
+func (s *Server) handleExtensionLaunch(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Browser string `json:"browser"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+	if req.Browser == "" {
+		req.Browser = "chrome"
+	}
+
+	extDir := platform.GetExtensionDir()
+	err := platform.LaunchBrowserWithExtension(req.Browser, extDir)
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Launched %s with NeoDM extension loaded.", req.Browser),
+		"path":    extDir,
 	})
 }
 

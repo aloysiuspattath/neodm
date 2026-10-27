@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Settings contains global IFD configurations.
+// Settings contains global NeoDM configurations.
 type Settings struct {
 	MaxConcurrentDownloads    int                     `json:"maxConcurrentDownloads"`
 	MaxConnectionsPerDownload int                     `json:"maxConnectionsPerDownload"`
@@ -154,12 +154,19 @@ func NewStoreWithPath(dataDir string) (*Store, error) {
 	return s, nil
 }
 
-// NewStore initializes the data store at %APPDATA%\IFD or ./data
+// NewStore initializes the data store at %APPDATA%\NeoDM or ./data
 func NewStore() (*Store, error) {
 	appData := os.Getenv("APPDATA")
 	var dataDir string
 	if appData != "" {
-		dataDir = filepath.Join(appData, "IFD")
+		dataDir = filepath.Join(appData, "NeoDM")
+		// Check for legacy %APPDATA%\IFD and auto-migrate files
+		legacyDir := filepath.Join(appData, "IFD")
+		if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+			if _, errLegacy := os.Stat(legacyDir); errLegacy == nil {
+				_ = os.Rename(legacyDir, dataDir)
+			}
+		}
 	} else {
 		dataDir = "./data"
 	}

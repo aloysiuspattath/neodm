@@ -906,7 +906,7 @@ func (t *Task) probeServer() error {
 			headReq.Header.Set(k, v)
 		}
 		if headReq.Header.Get("User-Agent") == "" {
-			headReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+			headReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 NeoDM/1.1")
 		}
 
 		headResp, err := t.client.Do(headReq)
@@ -933,7 +933,7 @@ func (t *Task) probeServer() error {
 			req.Header.Set(k, v)
 		}
 		if req.Header.Get("User-Agent") == "" {
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 NeoDM/1.1")
 		}
 		req.Header.Set("Range", "bytes=0-0")
 
@@ -972,7 +972,7 @@ func (t *Task) probeServer() error {
 		plainReq.Header.Set(k, v)
 	}
 	if plainReq.Header.Get("User-Agent") == "" {
-		plainReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+		plainReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 NeoDM/1.1")
 	}
 	plainResp, err := t.client.Do(plainReq)
 	if err != nil {
@@ -1046,7 +1046,7 @@ func (t *Task) runWorker(seg *Segment, wg *sync.WaitGroup) {
 			req.Header.Set(k, v)
 		}
 		if req.Header.Get("User-Agent") == "" {
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 IFD/1.0")
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 NeoDM/1.1")
 		}
 
 		if t.SupportsRange {

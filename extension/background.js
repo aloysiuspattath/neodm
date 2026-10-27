@@ -1,6 +1,29 @@
-// IFD Chrome / Firefox Browser Integration Service Worker (Manifest V3)
+// NeoDM Chrome / Edge / Brave / Firefox Companion Extension (Manifest V3)
 
-const IFD_API_BASE = 'http://127.0.0.1:19765';
+const DEFAULT_PORT = 8998;
+const FALLBACK_PORT = 19765;
+let activeApiBase = `http://127.0.0.1:${DEFAULT_PORT}`;
+
+// Dynamically ping API to verify active NeoDM port
+async function getApiBase() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${DEFAULT_PORT}/api/settings`, { signal: AbortSignal.timeout(1000) });
+    if (res.ok) {
+      activeApiBase = `http://127.0.0.1:${DEFAULT_PORT}`;
+      return activeApiBase;
+    }
+  } catch (e) {
+    // Try fallback port
+    try {
+      const resFallback = await fetch(`http://127.0.0.1:${FALLBACK_PORT}/api/settings`, { signal: AbortSignal.timeout(1000) });
+      if (resFallback.ok) {
+        activeApiBase = `http://127.0.0.1:${FALLBACK_PORT}`;
+        return activeApiBase;
+      }
+    } catch (e2) {}
+  }
+  return activeApiBase;
+}
 
 const DEFAULT_EXTENSIONS = [
   'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'iso', 'dmg',
@@ -26,20 +49,20 @@ chrome.runtime.onInstalled.addListener(() => {
 function setupContextMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
-      id: 'ifd-download-link',
-      title: 'Download with IFD',
+      id: 'neodm-download-link',
+      title: 'Download with NeoDM',
       contexts: ['link']
     });
 
     chrome.contextMenus.create({
-      id: 'ifd-download-media',
-      title: 'Download Media with IFD',
+      id: 'neodm-download-media',
+      title: 'Download Media with NeoDM',
       contexts: ['image', 'video', 'audio']
     });
 
     chrome.contextMenus.create({
-      id: 'ifd-download-page',
-      title: 'Download All Links with IFD (Site Grabber)',
+      id: 'neodm-download-page',
+      title: 'Download All Links with NeoDM (Site Grabber)',
       contexts: ['page']
     });
   });
@@ -47,17 +70,16 @@ function setupContextMenus() {
 
 // Handle Context Menu Clicks
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === 'ifd-download-link') {
+  if (info.menuItemId === 'neodm-download-link' || info.menuItemId === 'ifd-download-link') {
     if (info.linkUrl) {
-      await sendToIFD(info.linkUrl, tab);
+      await sendToNeoDM(info.linkUrl, tab);
     }
-  } else if (info.menuItemId === 'ifd-download-media') {
+  } else if (info.menuItemId === 'neodm-download-media' || info.menuItemId === 'ifd-download-media') {
     if (info.srcUrl) {
-      await sendToIFD(info.srcUrl, tab);
+      await sendToNeoDM(info.srcUrl, tab);
     }
-  } else if (info.menuItemId === 'ifd-download-page') {
+  } else if (info.menuItemId === 'neodm-download-page' || info.menuItemId === 'ifd-download-page') {
     if (tab && tab.url) {
-      // Trigger Site Grabber on the active page
       await crawlWithGrabber(tab.url);
     }
   }
@@ -85,7 +107,7 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
 
     // 2. Query active tab for cookies & referer
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    await sendToIFD(url, tab, downloadItem.filename);
+    await sendToNeoDM(url, tab, downloadItem.filename);
   }
 });
 
@@ -99,8 +121,8 @@ function matchesExtension(targetPath, exts) {
   }
 }
 
-// Send Download to IFD Engine via Loopback REST API
-async function sendToIFD(targetUrl, tab, suggestedFilename) {
+// Send Download to NeoDM Engine via Loopback REST API
+async function sendToNeoDM(targetUrl, tab, suggestedFilename) {
   let cookieHeader = '';
   let refererHeader = '';
 
@@ -124,8 +146,9 @@ async function sendToIFD(targetUrl, tab, suggestedFilename) {
     }
   };
 
+  const apiBase = await getApiBase();
   try {
-    const res = await fetch(`${IFD_API_BASE}/api/download/add`, {
+    const res = await fetch(`${apiBase}/api/download/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -135,21 +158,22 @@ async function sendToIFD(targetUrl, tab, suggestedFilename) {
       showBadge('✓', '#10b981');
     }
   } catch (err) {
-    console.warn('IFD Engine is offline or not responding:', err);
+    console.warn('NeoDM Engine is offline or not responding:', err);
     showBadge('!', '#ef4444');
   }
 }
 
 // Trigger Site Grabber Crawl
 async function crawlWithGrabber(pageUrl) {
+  const apiBase = await getApiBase();
   try {
-    await fetch(`${IFD_API_BASE}/api/grabber/crawl`, {
+    await fetch(`${apiBase}/api/grabber/crawl`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: pageUrl, depth: 1 })
     });
   } catch (err) {
-    console.warn('IFD Grabber request failed:', err);
+    console.warn('NeoDM Grabber request failed:', err);
   }
 }
 
@@ -164,13 +188,15 @@ function showBadge(text, color) {
 // Listen for messages from content scripts (e.g. video stream sniffer)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SNIFFED_MEDIA') {
-    sendToIFD(message.url, sender.tab, message.title);
+    sendToNeoDM(message.url, sender.tab, message.title);
     sendResponse({ success: true });
   } else if (message.type === 'CHECK_ENGINE') {
-    fetch(`${IFD_API_BASE}/api/settings`)
-      .then(res => res.json())
-      .then(data => sendResponse({ online: true, data }))
-      .catch(() => sendResponse({ online: false }));
+    getApiBase().then(apiBase => {
+      fetch(`${apiBase}/api/settings`)
+        .then(res => res.json())
+        .then(data => sendResponse({ online: true, data, apiBase }))
+        .catch(() => sendResponse({ online: false }));
+    });
     return true; // Keep channel open for async response
   }
 });

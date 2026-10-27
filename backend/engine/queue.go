@@ -19,7 +19,7 @@ type QueueRecord struct {
 	StartTime             string    `json:"startTime"` // "HH:MM" 24h format, e.g. "02:00"
 	StopTime              string    `json:"stopTime"`  // "HH:MM" 24h format, e.g. "06:00"
 	DaysOfWeek            []int     `json:"daysOfWeek"`
-	OnComplete            string    `json:"onComplete"` // "none", "close_ifd", "sleep", "shutdown"
+	OnComplete            string    `json:"onComplete"` // "none", "close_neodm", "sleep", "shutdown"
 	CreatedAt             time.Time `json:"createdAt"`
 }
 
@@ -329,10 +329,10 @@ func (qm *QueueManager) triggerOnComplete(q *QueueRecord) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		_ = cmd.Run()
 	case "shutdown":
-		cmd := exec.Command("shutdown.exe", "/s", "/t", "30", "/c", "IFD Queue Finished. Shutting down PC in 30 seconds.")
+		cmd := exec.Command("shutdown.exe", "/s", "/t", "30", "/c", "NeoDM Queue Finished. Shutting down PC in 30 seconds.")
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		_ = cmd.Run()
-	case "close_ifd":
+	case "close_neodm", "close_ifd":
 		// Gracefully terminate application
 		cmd := exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", syscall.Getpid()))
 		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

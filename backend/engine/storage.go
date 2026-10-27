@@ -47,7 +47,13 @@ func NewStorage(finalPath string, size int64, taskID string, tempDirOpt ...strin
 	}
 
 	baseName := filepath.Base(finalPath)
-	partPath := filepath.Join(partDir, fmt.Sprintf("%s.%s.ifd_part", baseName, taskID))
+	partPath := filepath.Join(partDir, fmt.Sprintf("%s.%s.neodm_part", baseName, taskID))
+	legacyPartPath := filepath.Join(partDir, fmt.Sprintf("%s.%s.ifd_part", baseName, taskID))
+	if _, err := os.Stat(partPath); os.IsNotExist(err) {
+		if _, errLegacy := os.Stat(legacyPartPath); errLegacy == nil {
+			_ = os.Rename(legacyPartPath, partPath)
+		}
+	}
 
 	// 3. Open or create the part file
 	file, err := os.OpenFile(partPath, os.O_CREATE|os.O_RDWR, 0666)
@@ -179,7 +185,7 @@ func copyAndDeleteFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-// RemovePartFile removes the unfinished .ifd_part file on download cancellation.
+// RemovePartFile removes the unfinished .neodm_part file on download cancellation.
 func (s *Storage) RemovePartFile() error {
 	_ = s.Close()
 	if _, err := os.Stat(s.partPath); err == nil {
