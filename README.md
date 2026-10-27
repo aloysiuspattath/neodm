@@ -128,17 +128,26 @@ neodm version
 
 ## 📦 Installation & Setup
 
-### Option A: Setup Wizard (Recommended)
-Download and run **`NeoDM-PRO-Setup.exe`**:
+Official Website & Download Portal: **[https://neodm.techfliq.com/](https://neodm.techfliq.com/)**
+
+### Option A: Windows Package Manager (WinGet — Recommended)
+Install NeoDM with a single command in PowerShell or Command Prompt:
+```powershell
+winget install NeoDM.NeoDM
+```
+*(Passed all 10 automated Microsoft WinGet validation stages including Windows Sandbox execution and Defender malware scan).*
+
+### Option B: Standalone Setup Wizard (.exe)
+Download and run [**`NeoDM_Setup_v1.1.8.exe`**](https://neodm.techfliq.com/download/installer):
 1. Deploys NeoDM to `%LOCALAPPDATA%\Programs\NeoDM`.
 2. Creates Desktop and Start Menu shortcuts.
-3. Automatically registers the browser extension for Chrome, Edge, Brave, and Firefox.
+3. Automatically registers the companion extension for Chrome, Edge, Brave, and Firefox via Windows Registry.
 4. Registers `uninstall.exe` in Windows **Add or Remove Programs**.
 
-### Option B: Portable Mode
-Download **`NeoDM-PRO-windows-x64.zip`**, extract to any directory or USB drive, and run `neodm.exe`. Settings and downloads are stored portably.
+### Option C: Portable Edition (.zip)
+Download [**`NeoDM_v1.1.8_Portable.zip`**](https://neodm.techfliq.com/download/portable), extract to any folder or USB flash drive, and launch `neodm.exe`. Settings, categories, and downloads are stored portably with zero registry traces.
 
-### Option C: Browser Extension Setup
+### Option D: Browser Companion Setup
 1. In NeoDM, click **Tools** → **Browser Integration**.
 2. Click **Open Folder in Explorer** or **Copy Path**.
 3. In Chrome or Edge, navigate to `chrome://extensions` (or `edge://extensions`), enable **Developer mode**, click **Load unpacked**, and select the extension folder!
