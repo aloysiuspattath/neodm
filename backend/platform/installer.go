@@ -507,7 +507,7 @@ func InstallApp() error {
 	if err == nil {
 		defer k.Close()
 		_ = k.SetStringValue("DisplayName", "Neo Download Manager PRO (NeoDM)")
-		_ = k.SetStringValue("DisplayVersion", "1.0.0")
+		_ = k.SetStringValue("DisplayVersion", "1.1.7")
 		_ = k.SetStringValue("Publisher", "NeoDM Team")
 		_ = k.SetStringValue("InstallLocation", installDir)
 		_ = k.SetStringValue("DisplayIcon", targetExe)
