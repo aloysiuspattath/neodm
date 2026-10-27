@@ -1,7 +1,9 @@
 # Neo Download Manager PRO (NeoDM)
 
-[![GitHub Release](https://img.shields.io/badge/Release-v1.1.0-blue.svg?logo=github)](https://github.com/aloysiuspattath/neodm/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v1.1.7-blue.svg?logo=github)](https://github.com/aloysiuspattath/neodm/releases)
 [![Build & Tests](https://img.shields.io/badge/Tests-29%20Passing%20(100%25)-success?logo=go)](https://golang.org)
+[![User Guide](https://img.shields.io/badge/Docs-User%20Guide-blueviolet?logo=read-the-docs)](docs/GUIDE.md)
+[![Extension Guide](https://img.shields.io/badge/Docs-Browser%20Extension-orange?logo=googlechrome)](docs/BROWSER_EXTENSION_GUIDE.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3%20%2F%20Commercial-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go)](https://golang.org)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6?logo=windows)](https://microsoft.com)
@@ -9,6 +11,33 @@
 [![Startup](https://img.shields.io/badge/Cold%20Start-%3C0.2s-brightgreen)]()
 
 > **Neo Download Manager PRO (NeoDM)** is a next-generation, high-performance Windows download manager, multimedia sniffer, and download accelerator. Engineered in pure Go with Microsoft Edge WebView2, NeoDM delivers 5x–10x download acceleration, zero-concatenation sparse file storage, automated browser extension registration, and an ultra-clean **Bento UI** with light and dark themes.
+
+---
+
+## 📸 Interface Preview
+
+![NeoDM Bento Dashboard](docs/screenshots/dashboard.png)
+
+---
+
+## 📚 Guides & Documentation
+
+Comprehensive documentation and step-by-step walkthroughs are available in the repository:
+
+- 📖 **[Comprehensive User Guide](docs/GUIDE.md)**: End-to-end guide covering Turbo Multi-Threading, Video Downloader, File Conflict Handling, Drive Storage Monitoring, Queue Management, Bandwidth Limiter, and CLI Reference.
+- 🧩 **[Browser Extension Setup Guide](docs/BROWSER_EXTENSION_GUIDE.md)**: Step-by-step instructions for installing and configuring the Manifest V3 companion extension in **Google Chrome**, **Microsoft Edge**, **Brave**, **Opera**, and **Mozilla Firefox**.
+
+---
+
+## 🖼️ Visual Walkthrough
+
+| Feature | Screenshot |
+| :--- | :--- |
+| **Silent YouTube & Video Downloader**<br>Analyzes media streams and downloads 1080p, 720p, or high-bitrate audio with automatic `ffmpeg` MP4 muxing and zero flashing command prompt popups. | ![Video Downloader](docs/screenshots/video-downloader.png) |
+| **Dynamic Multi-Threaded Segments**<br>Live segment monitor visualizing 1 to 32 parallel TCP streams with dynamic re-splitting and direct offset writing (`WriteAt`). | ![Download Properties](docs/screenshots/download-properties.png) |
+| **Host Drive Capacity & Storage Settings**<br>Automatic Win32 detection and live capacity monitoring across all mounted drives (`C:` through `I:`) with auto-categorization. | ![Storage Settings](docs/screenshots/storage-settings.png) |
+| **Browser Companion Integration**<br>Manifest V3 companion extension with 1-click folder reveal, path copy, and automatic Native Messaging Host registration. | ![Browser Integration](docs/screenshots/browser-integration.png) |
+| **Queue Manager & Scheduler**<br>Main and Night queue scheduling with customizable start/stop times and post-completion power actions (Sleep / Shutdown). | ![Queue Manager](docs/screenshots/queue-manager.png) |
 
 ---
 
@@ -100,6 +129,7 @@ Download **`NeoDM-PRO-windows-x64.zip`**, extract to any directory or USB drive,
 1. In NeoDM, click **Tools** → **Browser Integration**.
 2. Click **Open Folder in Explorer** or **Copy Path**.
 3. In Chrome or Edge, navigate to `chrome://extensions` (or `edge://extensions`), enable **Developer mode**, click **Load unpacked**, and select the extension folder!
+4. For detailed browser-specific instructions, see the [Browser Extension Setup Guide](docs/BROWSER_EXTENSION_GUIDE.md).
 
 ---
 
@@ -134,6 +164,10 @@ neodm/
 │   │   ├── window_windows.go     # DWM dark titlebar & Aero snap
 │   │   └── tray_windows.go       # System tray dock & balloon notifications
 │   └── server/                   # Local REST API & WebSocket telemetry hub
+├── docs/                         # Documentation, guides, and screenshots
+│   ├── GUIDE.md                  # Comprehensive end-to-end user guide
+│   ├── BROWSER_EXTENSION_GUIDE.md# Browser companion extension setup guide
+│   └── screenshots/              # High-resolution application screenshots
 ├── frontend/                     # Bento UI (HTML, CSS, JS, Canvas Speed Sparklines)
 ├── extension/                    # Manifest V3 browser companion extension
 └── installer/                    # Standalone setup wizard compiler
