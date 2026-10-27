@@ -99,7 +99,7 @@ export default {
     newHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
     // Cache-Control headers optimized for Core Web Vitals, Googlebot, and LLM crawlers
-    if (url.pathname === "/robots.txt" || url.pathname === "/llms.txt" || url.pathname === "/llms-full.txt") {
+    if (url.pathname.endsWith(".txt")) {
       newHeaders.set("Content-Type", "text/plain; charset=utf-8");
       newHeaders.set("Cache-Control", "public, max-age=86400");
     } else if (url.pathname === "/sitemap.xml") {
