@@ -379,3 +379,44 @@ func TestRealHTTPDownloadTransfer(t *testing.T) {
 	}
 }
 
+
+func TestConflictActionOverwriteAndRename(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "ifd_conflict_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := NewStoreWithPath(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	eng := NewEngine(store)
+
+	// Create an existing file on disk
+	existingPath := filepath.Join(tmpDir, "sample.iso")
+	if err := os.WriteFile(existingPath, []byte("original data"), 0644); err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+
+	// 1. Rename conflict action should generate sample (1).iso
+	tRename, err := eng.AddTaskWithConflict("http://example.com/sample.iso", "sample.iso", tmpDir, nil, "", "", "", "rename")
+	if err != nil {
+		t.Fatalf("AddTaskWithConflict rename failed: %v", err)
+	}
+	if tRename.Filename != "sample (1).iso" {
+		t.Errorf("Expected filename 'sample (1).iso', got '%s'", tRename.Filename)
+	}
+
+	// 2. Overwrite conflict action should preserve sample.iso exactly
+	tOverwrite, err := eng.AddTaskWithConflict("http://example.com/sample.iso", "sample.iso", tmpDir, nil, "", "", "", "overwrite")
+	if err != nil {
+		t.Fatalf("AddTaskWithConflict overwrite failed: %v", err)
+	}
+	if tOverwrite.Filename != "sample.iso" {
+		t.Errorf("Expected filename 'sample.iso', got '%s'", tOverwrite.Filename)
+	}
+	if tOverwrite.ConflictAction != "overwrite" {
+		t.Errorf("Expected ConflictAction 'overwrite', got '%s'", tOverwrite.ConflictAction)
+	}
+}

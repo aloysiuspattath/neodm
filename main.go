@@ -25,6 +25,9 @@ import (
 var frontendFS embed.FS
 
 func main() {
+	// Bind Windows Taskbar AppUserModelID before initializing GUI or WebView2
+	platform.SetProcessAppID()
+
 	// Check for CLI execution before initializing GUI or WebView2
 	if cli.RunCLI(os.Args) {
 		return

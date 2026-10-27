@@ -199,6 +199,15 @@ function initQuickDownloadBar() {
 
     try {
       btn.disabled = true;
+      btn.textContent = 'Checking...';
+
+      const conflict = await resolveFileConflictIfNeeded(targetUrl, '', '');
+      if (conflict.action === 'cancel') {
+        btn.disabled = false;
+        btn.textContent = 'Download Now';
+        return;
+      }
+
       btn.textContent = 'Starting...';
 
       const res = await fetch('/api/download/add', {
@@ -206,9 +215,10 @@ function initQuickDownloadBar() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: targetUrl,
-          filename: '',
+          filename: conflict.filename || '',
           saveDir: '',
-          queueName: 'main_queue'
+          queueName: 'main_queue',
+          conflictAction: conflict.action
         })
       });
 
@@ -2551,14 +2561,22 @@ function initModals() {
 
       try {
         btnStartVideo.disabled = true;
+
+        const conflict = await resolveFileConflictIfNeeded(downloadUrl, filename, saveDir);
+        if (conflict.action === 'cancel') {
+          btnStartVideo.disabled = false;
+          return;
+        }
+
         const resp = await fetch('/api/video/download', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: downloadUrl,
-            filename: filename,
+            filename: conflict.filename || filename,
             saveDir: saveDir,
-            quality: quality
+            quality: quality,
+            conflictAction: conflict.action
           })
         });
 
@@ -2748,16 +2766,22 @@ async function submitAddDownload(startImmediately) {
     const autoStart = autostartCheck ? autostartCheck.checked : true;
 
     try {
+      const conflict = await resolveFileConflictIfNeeded(url, filename, saveDir);
+      if (conflict.action === 'cancel') {
+        return;
+      }
+
       const res = await fetch('/api/download/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url,
-          filename,
+          filename: conflict.filename || filename,
           saveDir,
           queueId: queueId || 'main_queue',
           cookies,
-          autoStart: autoStart && startImmediately
+          autoStart: autoStart && startImmediately,
+          conflictAction: conflict.action
         })
       });
       if (res.ok) {
@@ -3139,7 +3163,7 @@ function populateSettingsForm(s) {
 
   fetchHostDrives();
 
-  document.getElementById('setting-duplicate-action').value = s.duplicateFileAction || 'rename';
+  document.getElementById('setting-duplicate-action').value = s.duplicateFileAction || 'prompt';
 
   document.getElementById('setting-max-concurrent').value = s.maxConcurrentDownloads || 4;
   document.getElementById('setting-max-conns').value = s.maxConnectionsPerDownload || 8;
@@ -3453,4 +3477,138 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+
+// --- File Collision Resolution System ---
+async function checkFileCollision(url, filename, saveDir) {
+  try {
+    const res = await fetch('/api/file/check_exists', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, filename, saveDir })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.error('File collision check error:', e);
+  }
+  return { exists: false };
+}
+
+function promptFileConflict(conflictData) {
+  return new Promise((resolve) => {
+    const nameEl = document.getElementById('conflict-filename');
+    const pathEl = document.getElementById('conflict-filepath');
+    const sizeEl = document.getElementById('conflict-filesize');
+    const dateEl = document.getElementById('conflict-filedate');
+    const renameTextEl = document.getElementById('conflict-suggested-name');
+    const rememberEl = document.getElementById('conflict-remember-choice');
+
+    if (nameEl) nameEl.textContent = conflictData.filename || 'File';
+    if (pathEl) pathEl.textContent = conflictData.fullPath || '';
+    if (sizeEl) sizeEl.textContent = `Size: ${formatSize(conflictData.existingFileSize || 0)}`;
+    if (dateEl) {
+      const dt = conflictData.existingFileModTime ? new Date(conflictData.existingFileModTime).toLocaleString() : 'Unknown';
+      dateEl.textContent = `Modified: ${dt}`;
+    }
+    if (renameTextEl) renameTextEl.textContent = conflictData.suggestedRename || `${conflictData.filename} (1)`;
+    if (rememberEl) rememberEl.checked = false;
+
+    const btnCancel = document.getElementById('btn-conflict-cancel');
+    const btnOverwrite = document.getElementById('btn-conflict-overwrite');
+    const btnRename = document.getElementById('btn-conflict-rename');
+
+    const cleanup = () => {
+      closeModal('modal-file-conflict');
+      if (btnCancel) btnCancel.removeEventListener('click', onCancel);
+      if (btnOverwrite) btnOverwrite.removeEventListener('click', onOverwrite);
+      if (btnRename) btnRename.removeEventListener('click', onRename);
+    };
+
+    const onCancel = () => {
+      cleanup();
+      resolve({ action: 'cancel' });
+    };
+
+    const onOverwrite = async () => {
+      const remember = rememberEl && rememberEl.checked;
+      cleanup();
+      if (remember) {
+        await updateSettingDuplicateAction('overwrite');
+      }
+      resolve({ action: 'overwrite', filename: conflictData.filename });
+    };
+
+    const onRename = async () => {
+      const remember = rememberEl && rememberEl.checked;
+      cleanup();
+      if (remember) {
+        await updateSettingDuplicateAction('rename');
+      }
+      resolve({ action: 'rename', filename: conflictData.suggestedRename || conflictData.filename });
+    };
+
+    if (btnCancel) btnCancel.addEventListener('click', onCancel, { once: true });
+    if (btnOverwrite) btnOverwrite.addEventListener('click', onOverwrite, { once: true });
+    if (btnRename) btnRename.addEventListener('click', onRename, { once: true });
+
+    openModal('modal-file-conflict');
+  });
+}
+
+async function updateSettingDuplicateAction(action) {
+  try {
+    const sResp = await fetch('/api/settings');
+    if (sResp.ok) {
+      const settings = await sResp.json();
+      settings.duplicateFileAction = action;
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const el = document.getElementById('setting-duplicate-action');
+      if (el) el.value = action;
+      if (window.currentSettings) window.currentSettings.duplicateFileAction = action;
+    }
+  } catch (e) {
+    console.error('Failed to update duplicateFileAction setting:', e);
+  }
+}
+
+async function resolveFileConflictIfNeeded(url, filename, saveDir) {
+  try {
+    let pref = 'prompt';
+    if (window.currentSettings && window.currentSettings.duplicateFileAction) {
+      pref = window.currentSettings.duplicateFileAction;
+    } else {
+      const sResp = await fetch('/api/settings');
+      if (sResp.ok) {
+        const settings = await sResp.json();
+        window.currentSettings = settings;
+        pref = settings.duplicateFileAction || 'prompt';
+      }
+    }
+
+    if (pref === 'overwrite') {
+      return { action: 'overwrite', filename: filename };
+    }
+    if (pref === 'rename') {
+      return { action: 'rename', filename: filename };
+    }
+
+    // pref === 'prompt': probe backend
+    const check = await checkFileCollision(url, filename, saveDir);
+    if (!check.exists) {
+      return { action: 'proceed', filename: filename };
+    }
+
+    // Prompt user via modal
+    return await promptFileConflict(check);
+  } catch (err) {
+    console.error('resolveFileConflictIfNeeded error:', err);
+    return { action: 'proceed', filename: filename };
+  }
 }

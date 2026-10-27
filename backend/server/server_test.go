@@ -629,3 +629,54 @@ func TestExtensionEndpoints(t *testing.T) {
 		t.Fatalf("handleOpenFileOrFolder failed with %d: %s", recOpen.Code, recOpen.Body.String())
 	}
 }
+
+func TestCheckFileExistsAPI(t *testing.T) {
+	srv, _, tmpDir := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	// Test 1: File does not exist
+	body, _ := json.Marshal(CheckFileExistsReq{
+		URL:      "http://example.com/testfile.iso",
+		Filename: "testfile.iso",
+		SaveDir:  tmpDir,
+	})
+	req := httptest.NewRequest("POST", "/api/file/check_exists", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.handleCheckFileExists(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleCheckFileExists failed: %s", rec.Body.String())
+	}
+
+	var resp CheckFileExistsResp
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if resp.Exists {
+		t.Errorf("Expected exists = false for non-existent file")
+	}
+
+	// Test 2: File exists on disk
+	filePath := filepath.Join(tmpDir, "testfile.iso")
+	if err := os.WriteFile(filePath, []byte("existing data"), 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
+
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest("POST", "/api/file/check_exists", bytes.NewReader(body))
+	srv.handleCheckFileExists(rec2, req2)
+
+	var resp2 CheckFileExistsResp
+	if err := json.Unmarshal(rec2.Body.Bytes(), &resp2); err != nil {
+		t.Fatalf("Failed to parse response 2: %v", err)
+	}
+	if !resp2.Exists {
+		t.Errorf("Expected exists = true for existing file")
+	}
+	if resp2.ExistingFileSize != int64(len("existing data")) {
+		t.Errorf("Expected size %d, got %d", len("existing data"), resp2.ExistingFileSize)
+	}
+	if resp2.SuggestedRename != "testfile (1).iso" {
+		t.Errorf("Expected suggestedRename = 'testfile (1).iso', got '%s'", resp2.SuggestedRename)
+	}
+}

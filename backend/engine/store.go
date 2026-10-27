@@ -75,7 +75,7 @@ func DefaultSettings() *Settings {
 		AutoOpenCompleted:     false,
 		NetworkBufferSize:     262144, // 256 KB buffer
 		ConnectTimeoutSeconds: 15,
-		DuplicateFileAction:   "rename",
+		DuplicateFileAction:   "prompt",
 		ProxyMode:             "direct",
 		DefaultQueueID:        "main_queue",
 		Queues:                make(map[string]*QueueRecord),
@@ -101,6 +101,7 @@ type DownloadRecord struct {
 	ETA             int64             `json:"eta"`        // seconds
 	Segments        []*Segment        `json:"segments"`
 	SupportsRange   bool              `json:"supportsRange"`
+	ConflictAction  string            `json:"conflictAction,omitempty"` // "prompt", "overwrite", "rename"
 	Headers         map[string]string `json:"headers"`
 	CreatedAt       time.Time         `json:"createdAt"`
 	CompletedAt     *time.Time        `json:"completedAt,omitempty"`

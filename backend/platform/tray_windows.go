@@ -5,6 +5,8 @@ package platform
 
 import (
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -32,6 +34,7 @@ var (
 	procSetForegroundWindow = user32.NewProc("SetForegroundWindow")
 	procGetCursorPos       = user32.NewProc("GetCursorPos")
 	procLoadIcon           = user32.NewProc("LoadIconW")
+	procLoadImage          = user32.NewProc("LoadImageW")
 
 	procGetModuleHandle    = kernel32.NewProc("GetModuleHandleW")
 	procGetModuleFileName  = kernel32.NewProc("GetModuleFileNameW")
@@ -68,6 +71,11 @@ const (
 
 	MF_STRING    = 0x00000000
 	MF_SEPARATOR = 0x00000800
+
+	IMAGE_ICON      = 1
+	LR_LOADFROMFILE = 0x00000010
+	LR_DEFAULTSIZE  = 0x00000040
+	LR_SHARED       = 0x00008000
 
 	IDI_APPLICATION = 32512
 	HWND_MESSAGE    = ^uintptr(2) // -3
@@ -177,6 +185,9 @@ func NewTrayManager(callbacks TrayCallbacks) (*TrayManager, error) {
 }
 
 func (tm *TrayManager) runMessageLoop() {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	hInstance, _, _ := procGetModuleHandle.Call(0)
 	className := syscall.StringToUTF16Ptr("NeoDMTrayClass")
 
@@ -184,8 +195,18 @@ func (tm *TrayManager) runMessageLoop() {
 		switch msg {
 		case WM_TRAYICON:
 			switch lParam {
-			case WM_LBUTTONUP, WM_LBUTTONDBLCLK:
+			case WM_LBUTTONDBLCLK:
 				if tm.callbacks.OnShow != nil {
+					tm.callbacks.OnShow()
+				}
+				return 0
+
+			case WM_LBUTTONUP:
+				hwndApp := GetAppHWND()
+				fg, _, _ := procGetForegroundWindow.Call()
+				if hwndApp != 0 && fg == hwndApp {
+					tm.showContextMenu(hwnd)
+				} else if tm.callbacks.OnShow != nil {
 					tm.callbacks.OnShow()
 				}
 				return 0
@@ -209,22 +230,24 @@ func (tm *TrayManager) runMessageLoop() {
 	})
 
 	wndClass := WNDCLASSEXW{
-		CbSize:      uint32(unsafe.Sizeof(WNDCLASSEXW{})),
-		LpfnWndProc: wndProc,
-		HInstance:   hInstance,
+		CbSize:        uint32(unsafe.Sizeof(WNDCLASSEXW{})),
+		LpfnWndProc:   wndProc,
+		HInstance:     hInstance,
 		LpszClassName: className,
 	}
 
 	procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wndClass)))
 
-	// Create message-only window
+	// Create a top-level unowned hidden window.
+	// NOTE: Shell_NotifyIcon MUST have an unowned top-level window (parent = 0), NOT HWND_MESSAGE.
+	// Windows explicitly drops Shell_NotifyIcon callback messages sent to HWND_MESSAGE windows.
 	hwnd, _, _ := procCreateWindowEx.Call(
 		0,
 		uintptr(unsafe.Pointer(className)),
 		uintptr(unsafe.Pointer(className)),
-		0,
+		0x80000000, // WS_POPUP (hidden, unowned top-level)
 		0, 0, 0, 0,
-		HWND_MESSAGE,
+		0, // Parent = 0 allows Shell_NotifyIcon callback delivery
 		0,
 		hInstance,
 		0,
@@ -233,13 +256,45 @@ func (tm *TrayManager) runMessageLoop() {
 	tm.mu.Lock()
 	tm.hwnd = hwnd
 
-	// Load icon: try extracting from current running exe, fallback to IDI_APPLICATION
-	exePathBuf := make([]uint16, 1024)
-	procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&exePathBuf[0])), uintptr(len(exePathBuf)))
-	hIcon, _, _ := procExtractIcon.Call(hInstance, uintptr(unsafe.Pointer(&exePathBuf[0])), 0)
+	// Load tray icon:
+	// 1. Try 16x16 icon from embedded Win32 resource ID 1
+	hIcon, _, _ := procLoadImage.Call(hInstance, uintptr(1), uintptr(IMAGE_ICON), 16, 16, uintptr(LR_SHARED))
+
+	// 2. Try loading from app.ico on disk if running local / dev
+	if hIcon == 0 {
+		currentExe := make([]uint16, 1024)
+		procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&currentExe[0])), uintptr(len(currentExe)))
+		exeDir := filepath.Dir(syscall.UTF16ToString(currentExe))
+		candidates := []string{
+			"app.ico",
+			filepath.Join("frontend", "favicon.ico"),
+			filepath.Join(exeDir, "app.ico"),
+			filepath.Join(exeDir, "frontend", "favicon.ico"),
+		}
+		for _, cand := range candidates {
+			if fi, err := os.Stat(cand); err == nil && fi.Size() > 0 {
+				pUtf16 := syscall.StringToUTF16Ptr(cand)
+				hIcon, _, _ = procLoadImage.Call(0, uintptr(unsafe.Pointer(pUtf16)), uintptr(IMAGE_ICON), 16, 16, uintptr(LR_LOADFROMFILE))
+				if hIcon != 0 {
+					break
+				}
+			}
+		}
+	}
+
+	// 3. Fallback to ExtractIconW from running executable
+	if hIcon == 0 || hIcon == 1 {
+		exePathBuf := make([]uint16, 1024)
+		procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&exePathBuf[0])), uintptr(len(exePathBuf)))
+		hIcon, _, _ = procExtractIcon.Call(hInstance, uintptr(unsafe.Pointer(&exePathBuf[0])), 0)
+	}
+
+	// 4. Fallback to LoadIconW resource ID 1
 	if hIcon == 0 || hIcon == 1 {
 		hIcon, _, _ = procLoadIcon.Call(hInstance, uintptr(1))
 	}
+
+	// 5. Ultimate fallback to IDI_APPLICATION
 	if hIcon == 0 || hIcon == 1 {
 		hIcon, _, _ = procLoadIcon.Call(0, uintptr(IDI_APPLICATION))
 	}

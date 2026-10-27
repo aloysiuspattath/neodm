@@ -43,8 +43,9 @@ type Task struct {
 	Headers       map[string]string
 	MaxConns      int
 	SpeedLimit    int64 // per-task speed limit in bytes/sec, 0 = unlimited
-	StreamQuality string
-	CreatedAt     time.Time
+	StreamQuality  string
+	ConflictAction string
+	CreatedAt      time.Time
 	CompletedAt   *time.Time
 	Error         string
 
@@ -161,8 +162,9 @@ func (e *Engine) taskFromRecord(rec *DownloadRecord) *Task {
 		Category:      rec.Category,
 		QueueID:       rec.QueueID,
 		QueueIndex:    rec.QueueIndex,
-		SupportsRange: rec.SupportsRange,
-		Headers:       rec.Headers,
+		SupportsRange:  rec.SupportsRange,
+		ConflictAction: rec.ConflictAction,
+		Headers:        rec.Headers,
 		MaxConns:      rec.MaxConns,
 		SpeedLimit:    rec.SpeedLimit,
 		CreatedAt:     rec.CreatedAt,
@@ -262,6 +264,11 @@ func (e *Engine) AddTaskWithQueue(rawURL string, customFilename string, customDi
 
 // AddTaskWithOptions creates a new download task with explicit queue, category, and stream quality options.
 func (e *Engine) AddTaskWithOptions(rawURL string, customFilename string, customDir string, headers map[string]string, queueID, customCategory, streamQuality string) (*Task, error) {
+	return e.AddTaskWithConflict(rawURL, customFilename, customDir, headers, queueID, customCategory, streamQuality, "")
+}
+
+// AddTaskWithConflict creates a new download task supporting explicit conflict action ("prompt", "overwrite", "rename").
+func (e *Engine) AddTaskWithConflict(rawURL string, customFilename string, customDir string, headers map[string]string, queueID, customCategory, streamQuality, conflictAction string) (*Task, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
@@ -293,30 +300,52 @@ func (e *Engine) AddTaskWithOptions(rawURL string, customFilename string, custom
 		}
 	}
 
-	// Ensure unique filename and save path
-	ext := filepath.Ext(filename)
-	baseWithoutExt := filename[:len(filename)-len(ext)]
 	targetFile := filepath.Join(targetDir, filename)
-	counter := 1
+
+	if conflictAction == "" {
+		if e.store.Settings != nil && e.store.Settings.DuplicateFileAction == "overwrite" {
+			conflictAction = "overwrite"
+		} else {
+			conflictAction = "rename"
+		}
+	}
 
 	e.mu.Lock()
-	for {
-		collision := false
-		if _, err := os.Stat(targetFile); err == nil {
-			collision = true
-		}
-		for _, existing := range e.tasks {
-			if existing.SavePath == targetFile && existing.Status != "Completed" {
-				collision = true
-				break
+	if conflictAction == "overwrite" {
+		// In overwrite mode: keep exact filename!
+		// Clean up any stale or paused task holding the exact targetFile so new task takes over
+		for tID, existing := range e.tasks {
+			if existing.SavePath == targetFile {
+				if existing.Status != "Downloading" && existing.Status != "Connecting" {
+					delete(e.tasks, tID)
+					delete(e.store.Records, tID)
+					e.store.dirty = true
+				}
 			}
 		}
-		if !collision {
-			break
+	} else {
+		// In rename mode: compute next available unique filename
+		ext := filepath.Ext(filename)
+		baseWithoutExt := filename[:len(filename)-len(ext)]
+		counter := 1
+		for {
+			collision := false
+			if _, err := os.Stat(targetFile); err == nil {
+				collision = true
+			}
+			for _, existing := range e.tasks {
+				if existing.SavePath == targetFile && existing.Status != "Completed" {
+					collision = true
+					break
+				}
+			}
+			if !collision {
+				break
+			}
+			filename = fmt.Sprintf("%s (%d)%s", baseWithoutExt, counter, ext)
+			targetFile = filepath.Join(targetDir, filename)
+			counter++
 		}
-		filename = fmt.Sprintf("%s (%d)%s", baseWithoutExt, counter, ext)
-		targetFile = filepath.Join(targetDir, filename)
-		counter++
 	}
 
 	if queueID == "" {
@@ -328,19 +357,20 @@ func (e *Engine) AddTaskWithOptions(rawURL string, customFilename string, custom
 
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	task := &Task{
-		ID:            id,
-		URL:           rawURL,
-		Filename:      filename,
-		SavePath:      targetFile,
-		Status:        "Queued",
-		Category:      category,
-		QueueID:       queueID,
-		Headers:       headers,
-		MaxConns:      e.store.Settings.MaxConnectionsPerDownload,
-		SpeedLimit:    0,
-		StreamQuality: streamQuality,
-		CreatedAt:     time.Now(),
-		engine:        e,
+		ID:             id,
+		URL:            rawURL,
+		Filename:       filename,
+		SavePath:       targetFile,
+		Status:         "Queued",
+		Category:       category,
+		QueueID:        queueID,
+		Headers:        headers,
+		MaxConns:       e.store.Settings.MaxConnectionsPerDownload,
+		SpeedLimit:     0,
+		StreamQuality:  streamQuality,
+		ConflictAction: conflictAction,
+		CreatedAt:      time.Now(),
+		engine:         e,
 		client:        e.client,
 		localLimiter:  NewRateLimiter(0),
 	}
@@ -482,6 +512,7 @@ func (t *Task) Start() {
 		t.fail(err)
 		return
 	}
+	storage.AllowOverwrite = (t.ConflictAction == "overwrite")
 	t.storage = storage
 
 	// Step 3: Initialize segment manager
@@ -1409,6 +1440,7 @@ func (t *Task) ToRecord() *DownloadRecord {
 		ETA:             t.ETA,
 		Segments:        segments,
 		SupportsRange:   t.SupportsRange,
+		ConflictAction:  t.ConflictAction,
 		Headers:         t.Headers,
 		CreatedAt:       t.CreatedAt,
 		CompletedAt:     t.CompletedAt,

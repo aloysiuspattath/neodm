@@ -6,11 +6,13 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"ifd/backend/engine"
 	"ifd/backend/grabber"
@@ -100,6 +102,7 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/system/drives", s.cors(s.handleSystemDrives))
 	mux.HandleFunc("/api/window/action", s.cors(s.handleWindowAction))
 	mux.HandleFunc("/api/clipboard/read", s.cors(s.handleReadClipboard))
+	mux.HandleFunc("/api/file/check_exists", s.cors(s.handleCheckFileExists))
 
 	// Static frontend
 	if s.frontend != nil {
@@ -150,14 +153,15 @@ func (s *Server) cors(h http.HandlerFunc) http.HandlerFunc {
 }
 
 type AddDownloadReq struct {
-	URL       string            `json:"url"`
-	Filename  string            `json:"filename"`
-	SaveDir   string            `json:"saveDir"`
-	QueueID   string            `json:"queueId,omitempty"`
-	QueueName string            `json:"queueName,omitempty"`
-	Headers   map[string]string `json:"headers"`
-	Cookies   string            `json:"cookies"`
-	AutoStart *bool             `json:"autoStart,omitempty"`
+	URL            string            `json:"url"`
+	Filename       string            `json:"filename"`
+	SaveDir        string            `json:"saveDir"`
+	QueueID        string            `json:"queueId,omitempty"`
+	QueueName      string            `json:"queueName,omitempty"`
+	Headers        map[string]string `json:"headers"`
+	Cookies        string            `json:"cookies"`
+	AutoStart      *bool             `json:"autoStart,omitempty"`
+	ConflictAction string            `json:"conflictAction,omitempty"`
 }
 
 func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
@@ -208,7 +212,7 @@ func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	task, err := s.engine.AddTaskWithQueue(downloadURL, downloadFilename, req.SaveDir, cleanHeaders, targetQueue)
+	task, err := s.engine.AddTaskWithConflict(downloadURL, downloadFilename, req.SaveDir, cleanHeaders, targetQueue, "", "", req.ConflictAction)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -630,10 +634,11 @@ type VideoAnalyzeReq struct {
 }
 
 type VideoDownloadReq struct {
-	URL      string `json:"url"`
-	Filename string `json:"filename"`
-	SaveDir  string `json:"saveDir"`
-	Quality  string `json:"quality"`
+	URL            string `json:"url"`
+	Filename       string `json:"filename"`
+	SaveDir        string `json:"saveDir"`
+	Quality        string `json:"quality"`
+	ConflictAction string `json:"conflictAction,omitempty"`
 }
 
 func (s *Server) handleVideoAnalyze(w http.ResponseWriter, r *http.Request) {
@@ -701,7 +706,7 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	task, err := s.engine.AddTaskWithOptions(downloadURL, downloadFilename, saveDir, nil, "", "Videos", req.Quality)
+	task, err := s.engine.AddTaskWithConflict(downloadURL, downloadFilename, saveDir, nil, "", "Videos", req.Quality, req.ConflictAction)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -713,6 +718,120 @@ func (s *Server) handleVideoDownload(w http.ResponseWriter, r *http.Request) {
 		"taskId":  task.ID,
 		"message": "Video download started",
 	})
+}
+
+type CheckFileExistsReq struct {
+	URL      string `json:"url"`
+	Filename string `json:"filename"`
+	SaveDir  string `json:"saveDir"`
+}
+
+type CheckFileExistsResp struct {
+	Exists              bool   `json:"exists"`
+	Filename            string `json:"filename"`
+	SaveDir             string `json:"saveDir"`
+	FullPath            string `json:"fullPath"`
+	ExistingFileSize    int64  `json:"existingFileSize,omitempty"`
+	ExistingFileModTime string `json:"existingFileModTime,omitempty"`
+	SuggestedRename     string `json:"suggestedRename,omitempty"`
+}
+
+func (s *Server) handleCheckFileExists(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CheckFileExistsReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	filename := strings.TrimSpace(req.Filename)
+	if filename == "" && req.URL != "" {
+		if parsed, err := url.Parse(req.URL); err == nil {
+			filename = filepath.Base(parsed.Path)
+		}
+	}
+	if filename == "" || filename == "." || filename == "/" {
+		filename = "download.bin"
+	}
+	filename = engine.SanitizeFilename(filename)
+
+	category := engine.DetectCategory(filename)
+	saveDir := strings.TrimSpace(req.SaveDir)
+	if saveDir == "" {
+		if s.store.Settings != nil && s.store.Settings.CategoryFolders != nil {
+			if folder, ok := s.store.Settings.CategoryFolders[category]; ok && folder != "" {
+				saveDir = folder
+			}
+		}
+		if saveDir == "" && s.store.Settings != nil {
+			saveDir = s.store.Settings.DefaultDownloadDir
+		}
+	}
+
+	fullPath := filepath.Join(saveDir, filename)
+	var exists bool
+	var existingSize int64
+	var modTimeStr string
+
+	if fi, err := os.Stat(fullPath); err == nil {
+		exists = true
+		existingSize = fi.Size()
+		modTimeStr = fi.ModTime().Format(time.RFC3339)
+	}
+
+	// Also check against active in-flight engine tasks
+	for _, task := range s.engine.GetAllTasks() {
+		if task.SavePath == fullPath && task.Status != "Completed" {
+			exists = true
+			if task.TotalSize > 0 {
+				existingSize = task.TotalSize
+			}
+			break
+		}
+	}
+
+	var suggestedRename string
+	if exists {
+		ext := filepath.Ext(filename)
+		baseWithoutExt := filename[:len(filename)-len(ext)]
+		counter := 1
+		for {
+			candName := fmt.Sprintf("%s (%d)%s", baseWithoutExt, counter, ext)
+			candPath := filepath.Join(saveDir, candName)
+			collision := false
+			if _, err := os.Stat(candPath); err == nil {
+				collision = true
+			}
+			for _, task := range s.engine.GetAllTasks() {
+				if task.SavePath == candPath && task.Status != "Completed" {
+					collision = true
+					break
+				}
+			}
+			if !collision {
+				suggestedRename = candName
+				break
+			}
+			counter++
+		}
+	}
+
+	resp := CheckFileExistsResp{
+		Exists:              exists,
+		Filename:            filename,
+		SaveDir:             saveDir,
+		FullPath:            fullPath,
+		ExistingFileSize:    existingSize,
+		ExistingFileModTime: modTimeStr,
+		SuggestedRename:     suggestedRename,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {

@@ -12,11 +12,12 @@ import (
 
 // Storage handles thread-safe random-access file writing directly to predetermined offsets.
 type Storage struct {
-	mu       sync.Mutex
-	path     string
-	partPath string
-	file     *os.File
-	size     int64
+	mu             sync.Mutex
+	path           string
+	partPath       string
+	file           *os.File
+	size           int64
+	AllowOverwrite bool
 }
 
 // NewStorage creates or opens a pre-allocated storage file at partPath.
@@ -112,19 +113,26 @@ func (s *Storage) Finalize() (string, error) {
 		return "", err
 	}
 
-	// Ensure destination file name uniqueness if existing file already present
 	finalDest := s.path
-	ext := filepath.Ext(finalDest)
-	baseWithoutExt := finalDest[:len(finalDest)-len(ext)]
-	counter := 1
-
-	for {
-		if _, err := os.Stat(finalDest); os.IsNotExist(err) {
-			break
+	if s.AllowOverwrite {
+		// In overwrite mode, remove existing destination file if present so atomic rename succeeds on Windows
+		if _, err := os.Stat(finalDest); err == nil {
+			_ = os.Remove(finalDest)
 		}
-		// If existing file is identical or already there, find next available filename
-		finalDest = fmt.Sprintf("%s (%d)%s", baseWithoutExt, counter, ext)
-		counter++
+	} else {
+		// Ensure destination file name uniqueness if existing file already present
+		ext := filepath.Ext(finalDest)
+		baseWithoutExt := finalDest[:len(finalDest)-len(ext)]
+		counter := 1
+
+		for {
+			if _, err := os.Stat(finalDest); os.IsNotExist(err) {
+				break
+			}
+			// If existing file is identical or already there, find next available filename
+			finalDest = fmt.Sprintf("%s (%d)%s", baseWithoutExt, counter, ext)
+			counter++
+		}
 	}
 
 	// 1. Fast path: Atomic rename (succeeds instantaneously when on same volume)

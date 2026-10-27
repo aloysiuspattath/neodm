@@ -1148,9 +1148,9 @@
             <div class="form-group" style="margin-top: 16px;">
               <label>Action When Duplicate File Exists:</label>
               <select id="setting-duplicate-action">
+                <option value="prompt">Ask every time (Prompt)</option>
                 <option value="rename">Automatically rename (e.g. file (1).zip)</option>
                 <option value="overwrite">Overwrite existing file</option>
-                <option value="resume">Resume / Append</option>
               </select>
             </div>
           </div>
@@ -1438,6 +1438,47 @@
       <div class="modal-footer">
         <button class="btn btn-modal-cancel" onclick="closeModal('modal-pause-warning')">Keep Downloading</button>
         <button class="btn btn-danger" id="btn-confirm-pause-nonresumable">Pause Anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: File Conflict (Overwrite or Rename) -->
+  <div class="modal-overlay" id="modal-file-conflict">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <div class="modal-title-row" style="color: #f59e0b; display: flex; align-items: center; gap: 8px;">
+          <svg class="modal-header-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <h2 class="modal-title" style="margin: 0; font-size: 15px; font-weight: 600;">File Name Conflict</h2>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-file-conflict')">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px;">
+        <p style="font-size: 13px; color: var(--text-primary); margin-bottom: 12px; line-height: 1.5;">
+          A file with this name already exists in the target download directory:
+        </p>
+        <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08)); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+          <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary); word-break: break-all;" id="conflict-filename">file.zip</div>
+          <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px; word-break: break-all;" id="conflict-filepath">C:\Users\...\Downloads\file.zip</div>
+          <div style="font-size: 11.5px; color: #94a3b8; margin-top: 6px; display: flex; gap: 16px;">
+            <span id="conflict-filesize">Size: --</span>
+            <span id="conflict-filedate">Modified: --</span>
+          </div>
+        </div>
+        <div style="margin-bottom: 10px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+            <input type="checkbox" id="conflict-remember-choice" style="cursor: pointer;">
+            <span>Remember this choice in Settings for future downloads</span>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer add-download-footer" style="display: flex; gap: 10px; justify-content: flex-end; padding: 12px 20px;">
+        <button class="btn btn-modal-cancel" id="btn-conflict-cancel" type="button">Cancel</button>
+        <button class="btn" id="btn-conflict-overwrite" type="button" style="background: #dc2626; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 500; cursor: pointer;">Overwrite</button>
+        <button class="btn btn-modal-download" id="btn-conflict-rename" type="button" style="background: #3b82f6; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-weight: 500; cursor: pointer;">Rename (<span id="conflict-suggested-name">file (1).zip</span>)</button>
       </div>
     </div>
   </div>

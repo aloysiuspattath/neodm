@@ -4,6 +4,8 @@
 package platform
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"unsafe"
@@ -23,6 +25,8 @@ var (
 	procSetWindowLong       = user32.NewProc("SetWindowLongW")
 	procSetWindowPos        = user32.NewProc("SetWindowPos")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
+	procSetClassLongPtr     = user32.NewProc("SetClassLongPtrW")
+	procSetAppUserModelID   = shell32.NewProc("SetCurrentProcessExplicitAppUserModelID")
 
 	dwmapi                    = syscall.NewLazyDLL("dwmapi.dll")
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
@@ -44,6 +48,19 @@ func DetachConsole() {
 		procShowWindow.Call(hwnd, 0) // SW_HIDE
 	}
 	procFreeConsole.Call()
+}
+
+const (
+	AppUserModelID = "NeoDM.DownloadManager.Pro.1.0"
+
+	GCLP_HICON   = ^uintptr(13) // -14
+	GCLP_HICONSM = ^uintptr(33) // -34
+)
+
+// SetProcessAppID binds the Windows Taskbar AppUserModelID for explicit icon grouping and notifications.
+func SetProcessAppID() {
+	appIDPtr := syscall.StringToUTF16Ptr(AppUserModelID)
+	procSetAppUserModelID.Call(uintptr(unsafe.Pointer(appIDPtr)))
 }
 
 const (
@@ -117,13 +134,61 @@ func SetupFramelessWindow(hwnd uintptr) {
 
 	// Set explicit application icon on the window for taskbar, Alt+Tab, and titlebar
 	hInstance, _, _ := procGetModuleHandle.Call(0)
-	hIcon, _, _ := procLoadIcon.Call(hInstance, uintptr(1))
-	if hIcon == 0 || hIcon == 1 {
-		hIcon, _, _ = procLoadIcon.Call(0, uintptr(IDI_APPLICATION))
+
+	// 1. Try loading 32x32 (big) and 16x16 (small) icon from embedded Win32 resource ID 1
+	hIconBig, _, _ := procLoadImage.Call(hInstance, uintptr(1), uintptr(IMAGE_ICON), 32, 32, uintptr(LR_SHARED))
+	hIconSmall, _, _ := procLoadImage.Call(hInstance, uintptr(1), uintptr(IMAGE_ICON), 16, 16, uintptr(LR_SHARED))
+
+	// 2. Try loading from app.ico or frontend/favicon.ico on disk if running unpackaged/dev
+	if hIconBig == 0 || hIconSmall == 0 {
+		currentExe := make([]uint16, 1024)
+		procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&currentExe[0])), uintptr(len(currentExe)))
+		exeDir := filepath.Dir(syscall.UTF16ToString(currentExe))
+		candidates := []string{
+			"app.ico",
+			filepath.Join("frontend", "favicon.ico"),
+			filepath.Join(exeDir, "app.ico"),
+			filepath.Join(exeDir, "frontend", "favicon.ico"),
+		}
+		for _, cand := range candidates {
+			if fi, err := os.Stat(cand); err == nil && fi.Size() > 0 {
+				pUtf16 := syscall.StringToUTF16Ptr(cand)
+				if hIconBig == 0 {
+					hIconBig, _, _ = procLoadImage.Call(0, uintptr(unsafe.Pointer(pUtf16)), uintptr(IMAGE_ICON), 32, 32, uintptr(LR_LOADFROMFILE))
+				}
+				if hIconSmall == 0 {
+					hIconSmall, _, _ = procLoadImage.Call(0, uintptr(unsafe.Pointer(pUtf16)), uintptr(IMAGE_ICON), 16, 16, uintptr(LR_LOADFROMFILE))
+				}
+				if hIconBig != 0 && hIconSmall != 0 {
+					break
+				}
+			}
+		}
 	}
-	if hIcon != 0 && hIcon != 1 {
-		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_SMALL), hIcon)
-		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_BIG), hIcon)
+
+	// 3. Fallback to ExtractIconW from running executable
+	if hIconBig == 0 || hIconBig == 1 {
+		exePathBuf := make([]uint16, 1024)
+		procGetModuleFileName.Call(0, uintptr(unsafe.Pointer(&exePathBuf[0])), uintptr(len(exePathBuf)))
+		hIconBig, _, _ = procExtractIcon.Call(hInstance, uintptr(unsafe.Pointer(&exePathBuf[0])), 0)
+	}
+
+	// 4. Fallback to standard application icon
+	if hIconBig == 0 || hIconBig == 1 {
+		hIconBig, _, _ = procLoadIcon.Call(0, uintptr(IDI_APPLICATION))
+	}
+	if hIconSmall == 0 || hIconSmall == 1 {
+		hIconSmall = hIconBig
+	}
+
+	// Apply icons to window instance and window class
+	if hIconSmall != 0 && hIconSmall != 1 {
+		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_SMALL), hIconSmall)
+		procSetClassLongPtr.Call(hwnd, GCLP_HICONSM, hIconSmall)
+	}
+	if hIconBig != 0 && hIconBig != 1 {
+		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_BIG), hIconBig)
+		procSetClassLongPtr.Call(hwnd, GCLP_HICON, hIconBig)
 	}
 }
 

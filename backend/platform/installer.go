@@ -148,8 +148,9 @@ $s = $ws.CreateShortcut('%s')
 $s.TargetPath = '%s'
 $s.WorkingDirectory = '%s'
 $s.Description = '%s'
+$s.IconLocation = '%s,0'
 $s.Save()
-`, shortcutPath, targetExe, filepath.Dir(targetExe), desc)
+`, shortcutPath, targetExe, filepath.Dir(targetExe), desc, targetExe)
 
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psScript)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -184,6 +185,15 @@ func InstallApp() error {
 		}
 	}
 	_ = copyFile(targetExe, filepath.Join(installDir, "uninstall.exe"))
+
+	// Copy app.ico alongside executable for direct filesystem fallbacks
+	sourceIco := filepath.Join(filepath.Dir(currentExe), "app.ico")
+	if _, err := os.Stat(sourceIco); os.IsNotExist(err) {
+		sourceIco = "app.ico"
+	}
+	if _, err := os.Stat(sourceIco); err == nil {
+		_ = copyFile(sourceIco, filepath.Join(installDir, "app.ico"))
+	}
 
 	// 2. Copy extension directory if available next to source executable
 	sourceExtDir := filepath.Join(filepath.Dir(currentExe), "extension")
