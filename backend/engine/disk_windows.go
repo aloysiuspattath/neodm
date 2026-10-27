@@ -28,10 +28,17 @@ const (
 
 // DriveMetric represents storage capacity and free space on a host storage volume.
 type DriveMetric struct {
-	Letter     string `json:"letter"`     // e.g. "C:"
-	Label      string `json:"label"`      // e.g. "Windows (OS)" or "Data"
-	TotalBytes int64  `json:"totalBytes"` // total capacity in bytes
-	FreeBytes  int64  `json:"freeBytes"`  // available bytes
+	Mount       string  `json:"mount"`       // e.g. "C:"
+	Letter      string  `json:"letter"`      // e.g. "C:" (backward compatibility)
+	Label       string  `json:"label"`       // e.g. "Windows (OS)" or "Data"
+	FS          string  `json:"fs"`          // e.g. "NTFS"
+	TotalBytes  int64   `json:"total_bytes"` // total capacity in bytes
+	FreeBytes   int64   `json:"free_bytes"`  // available bytes
+	TotalBytesC int64   `json:"totalBytes"`  // camelCase backward compatibility
+	FreeBytesC  int64   `json:"freeBytes"`   // camelCase backward compatibility
+	TotalStr    string  `json:"total_str"`   // formatted string e.g. "476.1 GB"
+	FreeStr     string  `json:"free_str"`    // formatted string e.g. "214.5 GB"
+	UsedPercent float64 `json:"used_percent"` // 0.0 - 100.0 percentage
 }
 
 // CheckFreeDiskSpace verifies that the volume hosting targetPath has at least requiredBytes free.
@@ -85,7 +92,7 @@ func formatBytesDisk(b int64) string {
 		div *= unit
 		exp++
 	}
-	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
 // GetDriveMetrics discovers all active fixed and removable drives and returns space statistics.
@@ -123,31 +130,51 @@ func GetDriveMetrics() ([]DriveMetric, error) {
 				continue
 			}
 
-			// Retrieve Volume Label
+			// Retrieve Volume Label & Filesystem Type
 			var volNameBuf [256]uint16
+			var fsNameBuf [256]uint16
 			rVol, _, _ := procGetVolumeInfoW.Call(
 				uintptr(unsafe.Pointer(rootPtr)),
 				uintptr(unsafe.Pointer(&volNameBuf[0])),
 				uintptr(len(volNameBuf)),
-				0, 0, 0, 0, 0,
+				0, 0, 0,
+				uintptr(unsafe.Pointer(&fsNameBuf[0])),
+				uintptr(len(fsNameBuf)),
 			)
 			label := ""
+			fsType := "NTFS"
 			if rVol != 0 {
 				label = syscall.UTF16ToString(volNameBuf[:])
+				if fsStr := syscall.UTF16ToString(fsNameBuf[:]); fsStr != "" {
+					fsType = fsStr
+				}
 			}
 			if label == "" {
 				if letter == "C:" {
 					label = "Local Disk (OS)"
 				} else {
-					label = "Local Storage"
+					label = "Local Storage (" + letter + ")"
 				}
 			}
 
+			usedBytes := totalBytes - freeBytes
+			var usedPercent float64
+			if totalBytes > 0 {
+				usedPercent = float64(usedBytes) / float64(totalBytes) * 100.0
+			}
+
 			metrics = append(metrics, DriveMetric{
-				Letter:     letter,
-				Label:      label,
-				TotalBytes: totalBytes,
-				FreeBytes:  freeBytes,
+				Mount:       letter,
+				Letter:      letter,
+				Label:       label,
+				FS:          fsType,
+				TotalBytes:  totalBytes,
+				FreeBytes:   freeBytes,
+				TotalBytesC: totalBytes,
+				FreeBytesC:  freeBytes,
+				TotalStr:    formatBytesDisk(totalBytes),
+				FreeStr:     formatBytesDisk(freeBytes),
+				UsedPercent: usedPercent,
 			})
 		}
 	}

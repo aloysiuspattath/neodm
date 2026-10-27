@@ -3088,27 +3088,42 @@ async function fetchHostDrives() {
     let lowDrive = null;
 
     data.drives.forEach(drive => {
-      const freeMB = drive.free_bytes / (1024 * 1024);
+      const mount = drive.mount || drive.letter || 'Disk';
+      const label = drive.label || '';
+      const fsType = drive.fs || 'NTFS';
+      const freeBytes = (drive.free_bytes !== undefined) ? drive.free_bytes : ((drive.freeBytes !== undefined) ? drive.freeBytes : 0);
+      const totalBytes = (drive.total_bytes !== undefined) ? drive.total_bytes : ((drive.totalBytes !== undefined) ? drive.totalBytes : 0);
+      const freeStr = drive.free_str || formatSize(freeBytes);
+      const totalStr = drive.total_str || formatSize(totalBytes);
+
+      let usedPercent = drive.used_percent;
+      if (usedPercent === undefined && totalBytes > 0) {
+        usedPercent = ((totalBytes - freeBytes) / totalBytes) * 100;
+      }
+      usedPercent = Math.min(100, Math.max(2, usedPercent || 0));
+
+      const freeMB = freeBytes / (1024 * 1024);
       const isCritical = freeMB < 100; // < 100MB (User low disk space condition)
       const isLow = freeMB < 5120;     // < 5GB
 
-      if (isCritical && !criticalDrive) criticalDrive = drive;
-      else if (isLow && !lowDrive) lowDrive = drive;
+      if (isCritical && !criticalDrive) criticalDrive = { mount, freeStr, label };
+      else if (isLow && !lowDrive) lowDrive = { mount, freeStr, label };
 
       const card = document.createElement('div');
       card.className = 'drive-gauge-item';
       card.innerHTML = `
         <div class="drive-gauge-top">
           <div class="drive-name-mount">
-            <span class="drive-mount">${escapeHtml(drive.mount)}</span>
-            <span class="drive-fs">${escapeHtml(drive.fs || 'NTFS')}</span>
+            <span class="drive-mount">${escapeHtml(mount)}</span>
+            ${label ? `<span class="drive-label" style="font-size: 11px; color: var(--text-muted, #94a3b8); margin-left: 4px;">(${escapeHtml(label)})</span>` : ''}
+            <span class="drive-fs">${escapeHtml(fsType)}</span>
           </div>
           <div class="drive-free-text ${isCritical ? 'critical' : (isLow ? 'low' : '')}">
-            ${escapeHtml(drive.free_str || '0 B')} free of ${escapeHtml(drive.total_str || '0 B')}
+            ${escapeHtml(freeStr)} free of ${escapeHtml(totalStr)}
           </div>
         </div>
         <div class="drive-progress-track">
-          <div class="drive-progress-fill ${isCritical ? 'critical' : (isLow ? 'low' : '')}" style="width: ${Math.min(100, Math.max(2, drive.used_percent || 0))}%"></div>
+          <div class="drive-progress-fill ${isCritical ? 'critical' : (isLow ? 'low' : '')}" style="width: ${usedPercent}%"></div>
         </div>
       `;
       container.appendChild(card);

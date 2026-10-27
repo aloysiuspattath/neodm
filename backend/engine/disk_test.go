@@ -29,13 +29,14 @@ func TestDiskSpaceChecks(t *testing.T) {
 	}
 	found := false
 	for _, m := range metrics {
-		if m.TotalBytes > 0 && m.FreeBytes > 0 {
+		t.Logf("Drive: Mount=%s, Letter=%s, Label=%s, FS=%s, Free=%s, Total=%s, Used=%.1f%%",
+			m.Mount, m.Letter, m.Label, m.FS, m.FreeStr, m.TotalStr, m.UsedPercent)
+		if m.TotalBytes > 0 && m.FreeBytes > 0 && m.Mount != "" && m.FreeStr != "" && m.TotalStr != "" {
 			found = true
-			break
 		}
 	}
 	if !found {
-		t.Errorf("Expected valid positive disk space in drive metrics")
+		t.Errorf("Expected valid positive disk space in drive metrics with all formatted fields populated")
 	}
 }
 
