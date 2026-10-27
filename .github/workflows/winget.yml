@@ -1,0 +1,17 @@
+name: Publish to WinGet
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - name: Publish NeoDM to Windows Package Manager
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: NeoDM.NeoDM
+          installers-regex: 'NeoDM-PRO-Setup\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
