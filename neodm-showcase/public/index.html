@@ -90,35 +90,40 @@
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
             <span>Portable Edition (.zip)</span>
           </a>
+        </div>
+
+        <div class="hero-winget-wrap">
           <button class="cli-pill" id="cliCopyPill" title="Click to copy quick download command (Microsoft WinGet Validation Passed 10/10)">
             <span class="cli-prefix">&gt;</span>
             <span id="cliPillText">winget install NeoDM.NeoDM</span>
-            <span style="font-size: 0.68rem; padding: 2px 7px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 600; letter-spacing: 0.02em;">Validation Passed (10/10)</span>
+            <span class="winget-badge">Passed (10/10)</span>
             <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
           </button>
         </div>
 
         <!-- Interactive 3D Hero Stage -->
         <div class="hero-stage">
-          <div class="stage-nav" role="tablist" aria-label="Feature Views">
-            <button class="stage-tab-btn active" data-img="screenshots/dashboard.png" role="tab" aria-selected="true">
-              <span>📊</span> Live Dashboard
-            </button>
-            <button class="stage-tab-btn" data-img="screenshots/download-properties.png" role="tab" aria-selected="false">
-              <span>⚡</span> 32-Stream Segments
-            </button>
-            <button class="stage-tab-btn" data-img="screenshots/video-downloader.png" role="tab" aria-selected="false">
-              <span>🎥</span> Video Sniffer &amp; Muxer
-            </button>
-            <button class="stage-tab-btn" data-img="screenshots/storage-settings.png" role="tab" aria-selected="false">
-              <span>💽</span> Drive Capacities
-            </button>
-            <button class="stage-tab-btn" data-img="screenshots/browser-integration.png" role="tab" aria-selected="false">
-              <span>🧩</span> Browser Extension
-            </button>
-            <button class="stage-tab-btn" data-img="screenshots/queue-manager.png" role="tab" aria-selected="false">
-              <span>📋</span> Queue Scheduler
-            </button>
+          <div class="stage-nav-wrap">
+            <div class="stage-nav" role="tablist" aria-label="Feature Views">
+              <button class="stage-tab-btn active" data-img="screenshots/dashboard.png" role="tab" aria-selected="true">
+                <span>📊</span> Live Dashboard
+              </button>
+              <button class="stage-tab-btn" data-img="screenshots/download-properties.png" role="tab" aria-selected="false">
+                <span>⚡</span> 32-Stream Segments
+              </button>
+              <button class="stage-tab-btn" data-img="screenshots/video-downloader.png" role="tab" aria-selected="false">
+                <span>🎥</span> Video Sniffer &amp; Muxer
+              </button>
+              <button class="stage-tab-btn" data-img="screenshots/storage-settings.png" role="tab" aria-selected="false">
+                <span>💽</span> Drive Capacities
+              </button>
+              <button class="stage-tab-btn" data-img="screenshots/browser-integration.png" role="tab" aria-selected="false">
+                <span>🧩</span> Browser Extension
+              </button>
+              <button class="stage-tab-btn" data-img="screenshots/queue-manager.png" role="tab" aria-selected="false">
+                <span>📋</span> Queue Scheduler
+              </button>
+            </div>
           </div>
 
           <div class="stage-window-frame">
@@ -142,13 +147,21 @@
         </div>
       </section>
 
+      <hr class="section-divider" aria-hidden="true">
+
       <!-- 2026 Interactive Telemetry Simulator Widget -->
       <section class="sim-section" id="simulator">
+        <div class="section-headline">
+          <span class="section-tag">Interactive Concurrency Lab</span>
+          <h2>Real-Time 32-Stream Concurrency</h2>
+          <p>Inspect how NeoDM dynamically subdivides remaining byte ranges to saturate your entire network bandwidth with zero assembly delay.</p>
+        </div>
+
         <div class="sim-card">
           <div class="sim-header">
             <div class="sim-header-info">
-              <h3>⚡ Live 32-Stream Parallelism Simulator</h3>
-              <p>Experience how NeoDM dynamically subdivides remaining byte ranges to saturate your entire bandwidth.</p>
+              <span class="sim-badge-pill">Hardware Concurrency</span>
+              <h3>Active Segment Allocation</h3>
             </div>
             <div class="sim-controls" role="group" aria-label="Connection Stream Selector">
               <button class="sim-conn-btn" data-conns="1">1 Stream</button>
@@ -191,6 +204,8 @@
           </div>
         </div>
       </section>
+
+      <hr class="section-divider" aria-hidden="true">
 
       <!-- Asymmetric Bento 3.0 Grid -->
       <section class="bento-section" id="features">
@@ -288,6 +303,8 @@
         </div>
       </section>
 
+      <hr class="section-divider" aria-hidden="true">
+
       <!-- Comparative Benchmark Matrix -->
       <section class="benchmark-section" id="comparison">
         <div class="section-headline">
@@ -297,6 +314,9 @@
         </div>
 
         <div class="table-glass-wrap">
+          <div class="table-scroll-hint" aria-hidden="true">
+            <span>⇄ Swipe horizontally to inspect full benchmark</span>
+          </div>
           <table class="matrix-table">
             <thead>
               <tr>
@@ -359,6 +379,8 @@
           </table>
         </div>
       </section>
+
+      <hr class="section-divider" aria-hidden="true">
 
       <!-- Dual Engine CLI Terminal Section -->
       <section class="cli-section" id="cli">
