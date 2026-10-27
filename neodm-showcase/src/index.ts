@@ -87,11 +87,26 @@ export default {
     // 4. Default: Serve Bento Landing Page & Static Assets from /public
     const response = await env.ASSETS.fetch(request);
 
-    // Apply high-security edge headers
+    // Apply high-security and SEO edge headers
     const newHeaders = new Headers(response.headers);
     newHeaders.set("X-Content-Type-Options", "nosniff");
     newHeaders.set("X-Frame-Options", "DENY");
     newHeaders.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+    // Cache-Control headers optimized for Core Web Vitals and Googlebot indexing
+    if (url.pathname === "/robots.txt") {
+      newHeaders.set("Content-Type", "text/plain; charset=utf-8");
+      newHeaders.set("Cache-Control", "public, max-age=86400");
+    } else if (url.pathname === "/sitemap.xml") {
+      newHeaders.set("Content-Type", "application/xml; charset=utf-8");
+      newHeaders.set("Cache-Control", "public, max-age=86400");
+    } else if (url.pathname.match(/\.(png|jpg|jpeg|webp|ico|svg|woff2)$/)) {
+      newHeaders.set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+    } else if (url.pathname.endsWith(".css") || url.pathname.endsWith(".js")) {
+      newHeaders.set("Cache-Control", "public, max-age=3600, stale-while-revalidate=600");
+    } else {
+      newHeaders.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
+    }
 
     return new Response(response.body, {
       status: response.status,

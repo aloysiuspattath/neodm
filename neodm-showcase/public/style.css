@@ -1184,6 +1184,92 @@ body {
   color: #34d399;
 }
 
+/* Frequently Asked Questions (FAQ) Section — Modern Details/Summary Accordion */
+.faq-section {
+  padding: clamp(60px, 9vh, 120px) 0;
+}
+
+.faq-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 860px;
+  margin-inline: auto;
+}
+
+.faq-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.faq-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.faq-card[open] {
+  border-color: var(--cyan);
+  box-shadow: 0 10px 30px -10px var(--cyan-subtle);
+}
+
+.faq-question {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: clamp(18px, 2.5vw, 24px) clamp(20px, 3vw, 28px);
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 1.4vw, 1.2rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  user-select: none;
+  list-style: none;
+}
+
+.faq-question::-webkit-details-marker {
+  display: none;
+}
+
+.faq-icon {
+  color: var(--cyan);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.faq-card[open] .faq-icon {
+  transform: rotate(180deg);
+}
+
+.faq-answer {
+  padding: 0 clamp(20px, 3vw, 28px) clamp(20px, 2.5vw, 26px);
+  color: var(--text-secondary);
+  font-size: clamp(0.95rem, 1.1vw, 1.02rem);
+  line-height: 1.7;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 16px;
+}
+
+.faq-answer p {
+  margin: 0;
+}
+
+.faq-answer code {
+  font-family: var(--font-mono);
+  color: var(--cyan);
+  background: rgba(0, 242, 254, 0.08);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+}
+
 /* Footer Section */
 .footer-wrap {
   border-top: 1px solid var(--border-subtle);
