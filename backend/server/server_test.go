@@ -628,6 +628,26 @@ func TestExtensionEndpoints(t *testing.T) {
 	if recOpen.Code != http.StatusOK {
 		t.Fatalf("handleOpenFileOrFolder failed with %d: %s", recOpen.Code, recOpen.Body.String())
 	}
+
+	// 3. Test /api/extension/register
+	reqReg := httptest.NewRequest("POST", "/api/extension/register", nil)
+	recReg := httptest.NewRecorder()
+	srv.handleExtensionRegister(recReg, reqReg)
+
+	if recReg.Code != http.StatusOK {
+		t.Fatalf("handleExtensionRegister failed with %d: %s", recReg.Code, recReg.Body.String())
+	}
+
+	var regRes struct {
+		Success bool   `json:"success"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(recReg.Body.Bytes(), &regRes); err != nil {
+		t.Fatalf("Failed to parse extension register response: %v", err)
+	}
+	if !regRes.Success {
+		t.Errorf("Expected success = true, got false")
+	}
 }
 
 func TestCheckFileExistsAPI(t *testing.T) {

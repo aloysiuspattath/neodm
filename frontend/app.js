@@ -2726,10 +2726,9 @@ function initModals() {
       const res = await fetch('/api/extension/register', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        showToast('Registered in registry & path copied to clipboard!', 'success');
+        showToast(data.message || 'Auto-registered & launched browser with NeoDM extension!', 'success');
         const st = document.getElementById('extension-register-status');
-        if (st) st.textContent = 'Registered in Registry ✓ Path copied to clipboard';
-        await fetch('/api/extension/open', { method: 'POST' });
+        if (st) st.textContent = data.message || 'Auto-registered ✓ Browser launched';
       } else {
         showToast(`Registration: ${data.error || 'Failed'}`, 'warning');
       }

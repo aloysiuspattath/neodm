@@ -407,10 +407,19 @@ func LaunchBrowserWithExtension(browser string, extDir string) error {
 		cmd = exec.Command(exe, "about:debugging#/runtime/this-firefox")
 	} else {
 		// Chromium browsers (Chrome, Edge, Brave) support --load-extension
-		cmd = exec.Command(exe, "--load-extension="+extDir, "chrome://extensions")
+		// Use explicit CmdLine formatting so switch parser detects --load-extension even when path contains spaces
+		targetURL := "chrome://extensions"
+		if b == "edge" {
+			targetURL = "edge://extensions"
+		} else if b == "brave" {
+			targetURL = "brave://extensions"
+		}
+		cmd = exec.Command(exe)
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			CmdLine: fmt.Sprintf(`"%s" --load-extension="%s" %s`, exe, extDir, targetURL),
+		}
 	}
 
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: false}
 	return cmd.Start()
 }
 

@@ -966,10 +966,32 @@ func (s *Server) handleExtensionRegister(w http.ResponseWriter, r *http.Request)
 		})
 		return
 	}
+
+	// Auto-launch installed browser with extension pre-loaded
+	launchedBrowser := ""
+	for _, b := range []string{"chrome", "edge", "brave"} {
+		if platform.FindBrowserExe(b) != "" {
+			_ = platform.LaunchBrowserWithExtension(b, extDir)
+			launchedBrowser = b
+			break
+		}
+	}
+
+	browserDisplayName := "browser"
+	switch launchedBrowser {
+	case "chrome":
+		browserDisplayName = "Google Chrome"
+	case "edge":
+		browserDisplayName = "Microsoft Edge"
+	case "brave":
+		browserDisplayName = "Brave Browser"
+	}
+
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Browser extension registered for Chrome, Edge, Brave, and Firefox.",
-		"path":    extDir,
+		"success":  true,
+		"message":  fmt.Sprintf("Auto-registered & launched %s with NeoDM extension!", browserDisplayName),
+		"path":     extDir,
+		"launched": launchedBrowser,
 	})
 }
 

@@ -1065,16 +1065,16 @@
                 <code id="browser-extension-path-display">Detecting path...</code>
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;">
-                <button class="btn btn-primary btn-sm" id="btn-launch-chrome" type="button">🌐 Launch in Chrome</button>
-                <button class="btn btn-secondary btn-sm" id="btn-launch-edge" type="button">🌐 Launch in Edge</button>
-                <button class="btn btn-secondary btn-sm" id="btn-launch-brave" type="button">🌐 Launch in Brave</button>
+                <button class="btn btn-primary btn-sm" id="btn-register-browsers" type="button">⚡ Auto-Register &amp; Launch</button>
+                <button class="btn btn-secondary btn-sm" id="btn-launch-chrome" type="button">🌐 Chrome</button>
+                <button class="btn btn-secondary btn-sm" id="btn-launch-edge" type="button">🌐 Edge</button>
+                <button class="btn btn-secondary btn-sm" id="btn-launch-brave" type="button">🌐 Brave</button>
                 <button class="btn btn-secondary btn-sm" id="btn-copy-ext-path" type="button">📋 Copy Path</button>
-                <button class="btn btn-secondary btn-sm" id="btn-open-ext-folder" type="button">📂 Open Folder in Explorer</button>
-                <button class="btn btn-secondary btn-sm" id="btn-register-browsers" type="button">⚡ Auto-Register with Browsers</button>
+                <button class="btn btn-secondary btn-sm" id="btn-open-ext-folder" type="button">📂 Open Folder</button>
               </div>
             </li>
-            <li><strong>Automated:</strong> Click <em>"Launch in Chrome/Edge"</em> above to launch your browser with NeoDM pre-loaded!</li>
-            <li><strong>Or Drag & Drop:</strong> In your browser, visit <code id="browser-ext-url-chrome">chrome://extensions</code> or <code>edge://extensions</code>, turn on <strong>Developer mode</strong>, and simply drag &amp; drop the extension folder directly onto the page!</li>
+            <li><strong>Option A (1-Click Auto):</strong> Click <em>"Auto-Register &amp; Launch"</em> to automatically configure registry keys and launch your browser with the extension pre-loaded!</li>
+            <li><strong>Option B (If browser is already open):</strong> On your browser's extensions page (<code id="browser-ext-url-chrome">chrome://extensions</code> or <code>edge://extensions</code>), turn on <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and press <code>Ctrl+V</code> and <code>Enter</code> (the path is automatically copied to your clipboard!). Or simply drag &amp; drop the extension folder onto the page.</li>
             <li>NeoDM extension icon will appear in your toolbar with instant 1-click download capture and video sniffing!</li>
           </ol>
         </div>
@@ -1327,8 +1327,8 @@
                 <code id="settings-browser-ext-path">Detecting extension folder...</code>
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" id="btn-settings-register-browsers" type="button">⚡ Auto-Register &amp; Launch</button>
                 <button class="btn btn-secondary btn-sm" id="btn-settings-open-ext-folder" type="button">📂 Open Folder in Explorer</button>
-                <button class="btn btn-secondary btn-sm" id="btn-settings-register-browsers" type="button">⚡ Auto-Register with Browsers</button>
               </div>
             </div>
           </div>
