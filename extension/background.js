@@ -3,6 +3,7 @@
 const DEFAULT_PORT = 8998;
 const FALLBACK_PORT = 19765;
 let activeApiBase = `http://127.0.0.1:${DEFAULT_PORT}`;
+let lastRightClickedMedia = null;
 
 // Dynamically ping API to verify active NeoDM port
 async function getApiBase() {
@@ -76,6 +77,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
   } else if (info.menuItemId === 'neodm-download-media' || info.menuItemId === 'ifd-download-media') {
     let targetUrl = info.srcUrl;
+    if (lastRightClickedMedia && (Date.now() - lastRightClickedMedia.timestamp < 5000)) {
+      targetUrl = lastRightClickedMedia.url;
+    }
     // On video platforms (YouTube, Vimeo, etc.), or if right-clicked on an overlay/page/frame,
     // or if srcUrl is missing / a blob: or data: URL, fallback to tab.url
     if (!targetUrl || targetUrl.startsWith('blob:') || targetUrl.startsWith('data:')) {
@@ -194,9 +198,17 @@ function showBadge(text, color) {
   }, 2500);
 }
 
-// Listen for messages from content scripts (e.g. video stream sniffer)
+// Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'SNIFFED_MEDIA') {
+  if (message.type === 'MEDIA_CONTEXT_CLICK') {
+    lastRightClickedMedia = {
+      url: message.url,
+      pageUrl: message.pageUrl,
+      title: message.title,
+      timestamp: Date.now()
+    };
+    sendResponse({ success: true });
+  } else if (message.type === 'SNIFFED_MEDIA') {
     sendToNeoDM(message.url, sender.tab, message.title);
     sendResponse({ success: true });
   } else if (message.type === 'CHECK_ENGINE') {
