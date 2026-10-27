@@ -8,7 +8,9 @@ import (
 	"io/fs"
 	"log"
 	"net"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -111,13 +113,29 @@ func main() {
 	// Listen on port
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
-		// Port may already be in use by an existing IFD instance
 		log.Printf("Port %s already active: %v", addr, err)
-		// If another instance is running, bring existing window to front or exit
-		if !*noGui {
-			platform.ShowAppWindow()
+		// Check if an existing healthy instance is running and notify it to show
+		client := &http.Client{Timeout: 800 * time.Millisecond}
+		resp, postErr := client.Post(fmt.Sprintf("http://%s/api/window/action", addr), "application/json", strings.NewReader(`{"action":"show"}`))
+		if postErr == nil && resp.StatusCode == http.StatusOK {
+			_ = resp.Body.Close()
+			return
 		}
-		return
+
+		// Port is held by an unresponsive/zombie process or dead instance.
+		// Clean up zombie processes and retry binding standard port.
+		_ = exec.Command("taskkill", "/F", "/IM", "neodm.exe").Run()
+		time.Sleep(300 * time.Millisecond)
+
+		listener, err = net.Listen("tcp", addr)
+		if err != nil {
+			// If standard port remains unavailable, bind to an ephemeral port
+			listener, err = net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				log.Fatalf("Failed to bind any port: %v", err)
+			}
+			addr = listener.Addr().String()
+		}
 	}
 
 	go func() {
@@ -274,6 +292,8 @@ func openWebView(url string, startMinimized bool, onReady func(w webview2.WebVie
 
 	if startMinimized {
 		platform.HideAppWindow()
+	} else {
+		platform.ShowAppWindow()
 	}
 
 	w.Run()

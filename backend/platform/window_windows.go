@@ -25,6 +25,7 @@ var (
 	procSetWindowLong       = user32.NewProc("SetWindowLongW")
 	procSetWindowPos        = user32.NewProc("SetWindowPos")
 	procGetForegroundWindow = user32.NewProc("GetForegroundWindow")
+	procFindWindow          = user32.NewProc("FindWindowW")
 	procSetClassLongPtr     = user32.NewProc("SetClassLongPtrW")
 	procSetAppUserModelID   = shell32.NewProc("SetCurrentProcessExplicitAppUserModelID")
 
@@ -101,12 +102,22 @@ func RegisterAppHWND(hwnd uintptr) {
 // GetAppHWND returns the stored window handle.
 func GetAppHWND() uintptr {
 	hwndMu.RLock()
-	defer hwndMu.RUnlock()
-	if appHWND != 0 {
-		return appHWND
+	hwnd := appHWND
+	hwndMu.RUnlock()
+	if hwnd != 0 {
+		return hwnd
 	}
-	r, _, _ := procGetForegroundWindow.Call()
-	return r
+
+	// Search for the NeoDM window by title across desktop windows
+	titlePtr := syscall.StringToUTF16Ptr("NeoDM - Neo Download Manager PRO")
+	found, _, _ := procFindWindow.Call(0, uintptr(unsafe.Pointer(titlePtr)))
+	if found != 0 {
+		hwndMu.Lock()
+		appHWND = found
+		hwndMu.Unlock()
+		return found
+	}
+	return 0
 }
 
 // SetupFramelessWindow removes the OS caption while preserving resize borders and DWM drop shadow.
@@ -190,6 +201,10 @@ func SetupFramelessWindow(hwnd uintptr) {
 		procSendMessage.Call(hwnd, uintptr(WM_SETICON), uintptr(ICON_BIG), hIconBig)
 		procSetClassLongPtr.Call(hwnd, GCLP_HICON, hIconBig)
 	}
+
+	// Ensure the window is shown and focused
+	procShowWindow.Call(hwnd, uintptr(SW_SHOW))
+	procSetForegroundWindow.Call(hwnd)
 }
 
 // PerformWindowAction handles window minimize, maximize/restore, close, and drag.

@@ -37,3 +37,38 @@ func TestIconExtractionAndLoading(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowStyleAndFrameless(t *testing.T) {
+	hInstance, _, _ := procGetModuleHandle.Call(0)
+	className, _ := syscall.UTF16PtrFromString("TestWindowClass")
+	wndClass := WNDCLASSEXW{
+		CbSize:        uint32(unsafe.Sizeof(WNDCLASSEXW{})),
+		LpfnWndProc:   procDefWindowProc.Addr(),
+		HInstance:     hInstance,
+		LpszClassName: className,
+	}
+	procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wndClass)))
+
+	hwnd, _, _ := procCreateWindowEx.Call(
+		0,
+		uintptr(unsafe.Pointer(className)),
+		uintptr(unsafe.Pointer(className)),
+		0xCF0000, // WS_OVERLAPPEDWINDOW
+		0, 0, 800, 600,
+		0, 0, hInstance, 0,
+	)
+	if hwnd == 0 {
+		t.Fatalf("CreateWindowEx failed")
+	}
+	defer procDestroyWindow.Call(hwnd)
+
+	// Test GetWindowLongW with GWL_STYLE
+	styleOld, _, _ := procGetWindowLong.Call(hwnd, uintptr(GWL_STYLE))
+	styleSigned, _, _ := procGetWindowLong.Call(hwnd, ^uintptr(15)) // -16
+	t.Logf("style with GWL_STYLE (0xFFFFFFF0): %x", styleOld)
+	t.Logf("style with ^uintptr(15) (-16): %x", styleSigned)
+
+	if styleOld == 0 && styleSigned != 0 {
+		t.Errorf("GWL_STYLE 0xFFFFFFF0 FAILED! Must use ^uintptr(15) (-16) in 64-bit!")
+	}
+}
