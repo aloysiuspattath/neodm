@@ -1,8 +1,10 @@
 # Neo Download Manager PRO (NeoDM)
 
+[![Website](https://img.shields.io/badge/Website-neodm.techfliq.com-00f2fe?logo=cloudflare)](https://neodm.techfliq.com/)
 [![GitHub Release](https://img.shields.io/badge/Release-v1.1.8-blue.svg?logo=github)](https://github.com/aloysiuspattath/neodm/releases)
 [![WinGet Package](https://img.shields.io/badge/WinGet-Validation%20Passed%20(10%2F10)-success?logo=windows11)](https://github.com/microsoft/winget-pkgs/pull/462854)
 [![Build & Tests](https://img.shields.io/badge/Tests-29%20Passing%20(100%25)-success?logo=go)](https://golang.org)
+[![LLMs.txt](https://img.shields.io/badge/LLMs.txt-Supported-emerald?logo=openai)](https://neodm.techfliq.com/llms.txt)
 [![User Guide](https://img.shields.io/badge/Docs-User%20Guide-blueviolet?logo=read-the-docs)](docs/GUIDE.md)
 [![Extension Guide](https://img.shields.io/badge/Docs-Browser%20Extension-orange?logo=googlechrome)](docs/BROWSER_EXTENSION_GUIDE.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3%20%2F%20Commercial-blue.svg)](LICENSE)

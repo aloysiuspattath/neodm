@@ -16,6 +16,12 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "routes": [
+    {
+      "pattern": "neodm.techfliq.com",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "GITHUB_REPO": "aloysiuspattath/neodm"
   }

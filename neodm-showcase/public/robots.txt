@@ -1,5 +1,10 @@
 User-agent: *
 Allow: /
+Allow: /llms.txt
+Allow: /llms-full.txt
+
+# LLM & AI Agents Documentation
+# ChatGPT, Gemini, Claude, Perplexity: see /llms.txt for structured machine-readable context
 
 # Sitemap
-Sitemap: https://neodm.pages.dev/sitemap.xml
+Sitemap: https://neodm.techfliq.com/sitemap.xml
