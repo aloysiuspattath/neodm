@@ -16,7 +16,7 @@ import (
 	"ifd/backend/engine"
 )
 
-const Version = "1.1.7"
+const Version = "1.1.8"
 
 // RunCLI checks os.Args. If a CLI command or direct URL is requested,
 // it executes the CLI action and returns true. If GUI should launch, it returns false.

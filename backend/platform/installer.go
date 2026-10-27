@@ -3,6 +3,7 @@ package platform
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 )
 
 const (
+	CurrentVersion   = "1.1.8"
 	uninstallRegKey  = `Software\Microsoft\Windows\CurrentVersion\Uninstall\NeoDM`
 	extensionID      = "neodmdownloadmanagerproaccelerat"
 	nativeHostName   = "com.neodm.downloader"
@@ -442,77 +444,123 @@ $s.Save()
 	return cmd.Run()
 }
 
-// InstallApp deploys IFD, creates shortcuts, and registers with Windows Add/Remove Programs
+// InstallApp deploys NeoDM using local or embedded payload
 func InstallApp() error {
+	return InstallAppWithEmbedded(nil, nil, nil)
+}
+
+// InstallAppWithEmbedded deploys NeoDM from embedded payload or filesystem, creates shortcuts, and registers uninstall entry
+func InstallAppWithEmbedded(embeddedApp []byte, embeddedIco []byte, embeddedExt fs.FS) error {
 	installDir := GetInstallDir()
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		return fmt.Errorf("failed to create install dir: %w", err)
 	}
 
-	// 1. Determine source executable
 	currentExe, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	sourceExe := currentExe
-	if strings.Contains(strings.ToLower(filepath.Base(currentExe)), "setup") {
-		candidate := filepath.Join(filepath.Dir(currentExe), "neodm.exe")
-		if _, err := os.Stat(candidate); err == nil {
-			sourceExe = candidate
-		}
-	}
 
 	targetExe := filepath.Join(installDir, "neodm.exe")
 
-	if filepath.Clean(sourceExe) != filepath.Clean(targetExe) {
-		if err := copyFile(sourceExe, targetExe); err != nil {
-			return fmt.Errorf("failed to copy executable: %w", err)
+	// 1. Deploy executable: Prefer embedded application payload
+	if len(embeddedApp) > 0 {
+		if err := os.WriteFile(targetExe, embeddedApp, 0755); err != nil {
+			return fmt.Errorf("failed to write embedded neodm.exe: %w", err)
+		}
+	} else {
+		sourceExe := currentExe
+		if strings.Contains(strings.ToLower(filepath.Base(currentExe)), "setup") {
+			candidate := filepath.Join(filepath.Dir(currentExe), "neodm.exe")
+			if _, err := os.Stat(candidate); err == nil {
+				sourceExe = candidate
+			}
+		}
+		if filepath.Clean(sourceExe) != filepath.Clean(targetExe) {
+			if err := copyFile(sourceExe, targetExe); err != nil {
+				return fmt.Errorf("failed to copy executable: %w", err)
+			}
 		}
 	}
-	_ = copyFile(targetExe, filepath.Join(installDir, "uninstall.exe"))
 
-	// Copy app.ico alongside executable for direct filesystem fallbacks
-	sourceIco := filepath.Join(filepath.Dir(currentExe), "app.ico")
-	if _, err := os.Stat(sourceIco); os.IsNotExist(err) {
-		sourceIco = "app.ico"
-	}
-	if _, err := os.Stat(sourceIco); err == nil {
-		_ = copyFile(sourceIco, filepath.Join(installDir, "app.ico"))
+	// 2. Deploy uninstaller: Copy setup executable as uninstall.exe so Windows executes setup --uninstall
+	uninstallExe := filepath.Join(installDir, "uninstall.exe")
+	if filepath.Clean(currentExe) != filepath.Clean(uninstallExe) {
+		_ = copyFile(currentExe, uninstallExe)
 	}
 
-	// 2. Copy extension directory if available next to source executable
-	sourceExtDir := filepath.Join(filepath.Dir(currentExe), "extension")
-	if _, err := os.Stat(sourceExtDir); os.IsNotExist(err) {
-		sourceExtDir = "extension"
+	// 3. Deploy app.ico
+	targetIco := filepath.Join(installDir, "app.ico")
+	if len(embeddedIco) > 0 {
+		_ = os.WriteFile(targetIco, embeddedIco, 0644)
+	} else {
+		sourceIco := filepath.Join(filepath.Dir(currentExe), "app.ico")
+		if _, err := os.Stat(sourceIco); os.IsNotExist(err) {
+			sourceIco = "app.ico"
+		}
+		if _, err := os.Stat(sourceIco); err == nil {
+			_ = copyFile(sourceIco, targetIco)
+		}
 	}
+
+	// 4. Deploy extension directory
 	targetExtDir := filepath.Join(installDir, "extension")
-	if fi, err := os.Stat(sourceExtDir); err == nil && fi.IsDir() {
-		_ = copyDir(sourceExtDir, targetExtDir)
+	_ = os.MkdirAll(targetExtDir, 0755)
+	if embeddedExt != nil {
+		_ = fs.WalkDir(embeddedExt, ".", func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d == nil {
+				return nil
+			}
+			rel := strings.TrimPrefix(path, "extension")
+			rel = strings.TrimPrefix(rel, "/")
+			rel = strings.TrimPrefix(rel, "\\")
+			if rel == "" || rel == "." {
+				return nil
+			}
+			destPath := filepath.Join(targetExtDir, rel)
+			if d.IsDir() {
+				return os.MkdirAll(destPath, 0755)
+			}
+			data, err := fs.ReadFile(embeddedExt, path)
+			if err != nil {
+				return nil
+			}
+			return os.WriteFile(destPath, data, 0644)
+		})
 		_ = RegisterBrowserExtensions(targetExtDir)
+	} else {
+		sourceExtDir := filepath.Join(filepath.Dir(currentExe), "extension")
+		if _, err := os.Stat(sourceExtDir); os.IsNotExist(err) {
+			sourceExtDir = "extension"
+		}
+		if fi, err := os.Stat(sourceExtDir); err == nil && fi.IsDir() {
+			_ = copyDir(sourceExtDir, targetExtDir)
+			_ = RegisterBrowserExtensions(targetExtDir)
+		}
 	}
 
-	// 3. Create Start Menu shortcut
+	// 5. Create Start Menu shortcut
 	appData := os.Getenv("APPDATA")
 	startMenuDir := filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs")
 	startMenuLnk := filepath.Join(startMenuDir, "Neo Download Manager PRO.lnk")
 	_ = CreateShortcut(targetExe, startMenuLnk, "Neo Download Manager PRO - High-Speed Accelerator")
 
-	// 4. Create Desktop shortcut
+	// 6. Create Desktop shortcut
 	userProfile := os.Getenv("USERPROFILE")
 	desktopLnk := filepath.Join(userProfile, "Desktop", "Neo Download Manager PRO.lnk")
 	_ = CreateShortcut(targetExe, desktopLnk, "Neo Download Manager PRO - High-Speed Accelerator")
 
-	// 5. Register in Windows Registry (Add or Remove Programs)
+	// 7. Register in Windows Registry (Add or Remove Programs)
 	k, _, err := registry.CreateKey(registry.CURRENT_USER, uninstallRegKey, registry.SET_VALUE)
 	if err == nil {
 		defer k.Close()
 		_ = k.SetStringValue("DisplayName", "Neo Download Manager PRO (NeoDM)")
-		_ = k.SetStringValue("DisplayVersion", "1.1.7")
+		_ = k.SetStringValue("DisplayVersion", CurrentVersion)
 		_ = k.SetStringValue("Publisher", "NeoDM Team")
 		_ = k.SetStringValue("InstallLocation", installDir)
 		_ = k.SetStringValue("DisplayIcon", targetExe)
-		_ = k.SetStringValue("UninstallString", fmt.Sprintf(`"%s"`, filepath.Join(installDir, "uninstall.exe")))
-		_ = k.SetStringValue("QuietUninstallString", fmt.Sprintf(`"%s" --silent`, filepath.Join(installDir, "uninstall.exe")))
+		_ = k.SetStringValue("UninstallString", fmt.Sprintf(`"%s"`, uninstallExe))
+		_ = k.SetStringValue("QuietUninstallString", fmt.Sprintf(`"%s" --silent`, uninstallExe))
 		_ = k.SetDWordValue("NoModify", 1)
 		_ = k.SetDWordValue("NoRepair", 1)
 	}

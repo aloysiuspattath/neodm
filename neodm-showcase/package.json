@@ -1,6 +1,6 @@
 {
   "name": "neodm-showcase",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Product showcase and dynamic landing page for Neo Download Manager PRO hosted on Cloudflare Workers",
   "private": true,
   "type": "module",

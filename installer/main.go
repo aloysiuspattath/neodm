@@ -1,27 +1,73 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"ifd/backend/platform"
 )
 
-func main() {
-	silent := flag.Bool("silent", false, "Perform unattended silent installation")
-	flag.BoolVar(silent, "s", false, "Perform unattended silent installation")
-	uninstall := flag.Bool("uninstall", false, "Uninstall NeoDM from the system")
-	noLaunch := flag.Bool("no-launch", false, "Do not launch NeoDM after installation")
-	flag.Parse()
+// Embedded application binaries & resources for true single-file standalone installer
+//
+//go:embed neodm.exe
+var embeddedApp []byte
 
-	// If explicit uninstall flag passed
-	if *uninstall {
-		if !*silent {
+//go:embed app.ico
+var embeddedIco []byte
+
+//go:embed extension/*
+var embeddedExt embed.FS
+
+func main() {
+	var silent bool
+	var uninstall bool
+	var noLaunch bool
+
+	// Parse custom / Windows-style CLI switches (/S, /silent, /quiet, /qn, /uninstall, /no-launch)
+	for _, arg := range os.Args[1:] {
+		cleaned := strings.ToLower(strings.TrimLeft(arg, "-/"))
+		switch cleaned {
+		case "s", "silent", "quiet", "qn", "verysilent":
+			silent = true
+		case "uninstall", "remove":
+			uninstall = true
+		case "no-launch", "nolaunch", "no_launch":
+			noLaunch = true
+		}
+	}
+
+	// Also support Go standard flag syntax (-silent, -s, -uninstall, -no-launch)
+	flagSilent := flag.Bool("silent", false, "Perform unattended silent installation")
+	flag.BoolVar(flagSilent, "s", false, "Perform unattended silent installation")
+	flagUninstall := flag.Bool("uninstall", false, "Uninstall NeoDM from the system")
+	flagNoLaunch := flag.Bool("no-launch", false, "Do not launch NeoDM after installation")
+	_ = flag.CommandLine.Parse(os.Args[1:])
+
+	if *flagSilent {
+		silent = true
+	}
+	if *flagUninstall {
+		uninstall = true
+	}
+	if *flagNoLaunch {
+		noLaunch = true
+	}
+
+	// Detect non-interactive CI / sandbox environments (Azure Pipelines, GitHub Actions, WinGet Sandbox)
+	if os.Getenv("CI") != "" || os.Getenv("TF_BUILD") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		silent = true
+	}
+
+	// 1. Uninstall mode
+	if uninstall {
+		if !silent {
 			if !platform.ShowConfirmDialog("Uninstall NeoDM PRO", "Are you sure you want to completely uninstall Neo Download Manager PRO?") {
 				os.Exit(0)
 			}
@@ -34,12 +80,12 @@ func main() {
 		_ = killCmd2.Run()
 
 		if err := platform.UninstallApp(); err != nil {
-			if !*silent {
+			if !silent {
 				platform.ShowInfoDialog("Uninstall Error", fmt.Sprintf("Error during uninstall: %v", err))
 			}
 			os.Exit(1)
 		}
-		if !*silent {
+		if !silent {
 			platform.ShowInfoDialog("Uninstall Complete", "Neo Download Manager PRO has been completely removed from this computer.")
 		}
 		os.Exit(0)
@@ -48,8 +94,8 @@ func main() {
 	isInstalled := platform.IsAppInstalled()
 	isUpdate := isInstalled
 
-	// Interactive mode: Check if already installed and prompt user for action
-	if !*silent {
+	// 2. Interactive prompt (only when NOT silent)
+	if !silent {
 		action := platform.PromptInstallerAction(isInstalled)
 		switch action {
 		case "exit":
@@ -87,15 +133,18 @@ func main() {
 	_ = killCmd2.Run()
 	time.Sleep(500 * time.Millisecond)
 
-	err := platform.InstallApp()
+	// 3. Perform Installation using embedded payload
+	err := platform.InstallAppWithEmbedded(embeddedApp, embeddedIco, embeddedExt)
 	if err != nil {
-		if !*silent {
+		if !silent {
 			platform.ShowInfoDialog("Setup Error", fmt.Sprintf("Installation failed: %v", err))
+		} else {
+			fmt.Fprintf(os.Stderr, "Installation failed: %v\n", err)
 		}
 		os.Exit(1)
 	}
 
-	if !*silent {
+	if !silent {
 		if isUpdate {
 			platform.ShowInfoDialog("NeoDM Updated", "Neo Download Manager PRO has been successfully updated to the latest version!\n\nYour existing downloads, history, and settings have been preserved.")
 		} else {
@@ -103,13 +152,13 @@ func main() {
 		}
 	}
 
-	// Launch installed app if requested
-	if !*noLaunch {
+	// 4. Launch installed app if requested
+	if !noLaunch && !silent {
 		installedExe := filepath.Join(platform.GetInstallDir(), "neodm.exe")
 		launchCmd := exec.Command(installedExe)
 		launchCmd.Dir = platform.GetInstallDir()
-		// Do NOT set HideWindow: true on GUI application, as it passes SW_HIDE into STARTUPINFO
-		// causing WebView2 compositor to fail surface creation (blank screen).
 		_ = launchCmd.Start()
 	}
+
+	os.Exit(0)
 }

@@ -23,8 +23,12 @@ jobs:
           cache: true
 
       - name: Build Production Binaries
+        shell: powershell
         run: |
           go build -ldflags="-s -w -H=windowsgui" -o neodm.exe main.go
+          Copy-Item neodm.exe installer/
+          Copy-Item app.ico installer/
+          Copy-Item -Recurse extension installer/extension -Force
           go build -ldflags="-s -w" -o NeoDM-PRO-Setup.exe installer/main.go
 
       - name: Package Distribution Archives
