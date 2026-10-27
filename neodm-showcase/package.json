@@ -1,0 +1,17 @@
+{
+  "name": "neodm-showcase",
+  "version": "1.1.7",
+  "description": "Product showcase and dynamic landing page for Neo Download Manager PRO hosted on Cloudflare Workers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261023.1",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NeoDM PRO — Next-Gen Windows Download Accelerator</title>
+  <meta name="description" content="Experience 5x–10x download acceleration, zero concatenation freeze, silent video sniffer, and an ultra-clean Bento UI with Neo Download Manager PRO.">
+  <link rel="icon" type="image/x-icon" href="app.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Top Navigation -->
+    <nav>
+      <a href="/" class="brand">
+        <img src="app.ico" alt="NeoDM" onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/app.ico'">
+        <span>NeoDM PRO</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#comparison">Benchmarks</a>
+        <a href="#cli">CLI</a>
+        <a href="https://github.com/aloysiuspattath/neodm/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">Docs</a>
+        <a href="https://github.com/aloysiuspattath/neodm" target="_blank" rel="noopener">GitHub</a>
+        <button id="themeToggle" class="theme-toggle" aria-label="Toggle Theme">🌙 Dark</button>
+        <a href="/download/installer" class="btn btn-primary" style="padding: 8px 18px; font-size: 0.85rem;">Download</a>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+      <div class="badge">
+        <span>⚡ Pure Go + Edge WebView2 Engine</span>
+        <span>•</span>
+        <span id="version-tag">Release v1.1.7</span>
+      </div>
+      <h1>Ultra-Fast Acceleration.<br>Zero Concatenation Delay.</h1>
+      <p class="hero-desc">
+        Neo Download Manager PRO (NeoDM) splits files into up to 32 dynamic streams and writes directly to disk offsets via sparse files. Assemble 100% finished downloads with 0 seconds of disk freeze.
+      </p>
+      <div class="hero-cta">
+        <a href="/download/installer" class="btn btn-primary">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path></svg>
+          <span>Download Setup (.exe)</span>
+        </a>
+        <a href="/download/portable" class="btn btn-secondary">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+          <span>Portable Edition (.zip)</span>
+        </a>
+      </div>
+
+      <!-- Dashboard Hero Preview -->
+      <div class="hero-preview">
+        <img src="screenshots/dashboard.png" 
+             alt="NeoDM Bento Dashboard" 
+             onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/docs/screenshots/dashboard.png'">
+      </div>
+    </header>
+
+    <!-- Bento Features Section -->
+    <section class="bento-section" id="features">
+      <div class="section-title">
+        <h2>Engineered for Modern Power Users</h2>
+        <p>Combining the speed of native compiled systems with the ergonomics of modern Bento design.</p>
+      </div>
+
+      <div class="bento-grid">
+        <!-- Feature 1: Multi-Threading & Direct Offset I/O -->
+        <div class="bento-card col-8">
+          <div class="card-icon">⚡</div>
+          <h3>Dynamic Turbo Multi-Threading & Direct Offset I/O</h3>
+          <p>Unlike legacy download managers that store separate chunk files and freeze your drive assembling them, NeoDM streams straight into destination disk offsets via <code>WriteAt</code>. When your download hits 100%, it is already assembled and ready immediately.</p>
+          <img src="screenshots/download-properties.png" 
+               alt="Dynamic Segments Monitor" 
+               onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/docs/screenshots/download-properties.png'">
+        </div>
+
+        <!-- Feature 2: Silent Video Grabber -->
+        <div class="bento-card col-4">
+          <div class="card-icon">🎥</div>
+          <h3>Silent Video Grabber</h3>
+          <p>Extract 1080p, 720p, or high-bitrate audio from YouTube and HTML5 video sites. Automatically muxes audio and video tracks into pristine MP4 containers with zero command prompt popups.</p>
+          <img src="screenshots/video-downloader.png" 
+               alt="Video Downloader" 
+               onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/docs/screenshots/video-downloader.png'">
+        </div>
+
+        <!-- Feature 3: Host Drive Storage Capacity -->
+        <div class="bento-card col-4">
+          <div class="card-icon">💽</div>
+          <h3>Host Drive Capacities</h3>
+          <p>Direct Win32 API integration enumerates all mounted volumes (C: through I:), displaying live capacity meters and automatically organizing downloads into category folders.</p>
+          <img src="screenshots/storage-settings.png" 
+               alt="Storage Capacities" 
+               onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/docs/screenshots/storage-settings.png'">
+        </div>
+
+        <!-- Feature 4: Browser Companion Extension -->
+        <div class="bento-card col-8">
+          <div class="card-icon">🧩</div>
+          <h3>Browser Companion Extension (Manifest V3)</h3>
+          <p>Seamless 1-click integration with Google Chrome, Microsoft Edge, Brave, and Firefox. Forwards download links, session cookies, and authentication headers automatically with bypass hotkey support.</p>
+          <img src="screenshots/browser-integration.png" 
+               alt="Browser Extension Integration" 
+               onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/docs/screenshots/browser-integration.png'">
+        </div>
+
+        <!-- Feature 5: Queue Manager & Night Scheduler -->
+        <div class="bento-card col-6">
+          <div class="card-icon">📋</div>
+          <h3>Main & Night Queue Scheduler</h3>
+          <p>Organize batch downloads with customizable start and stop windows. Features automatic post-completion power actions including Computer Sleep and Automated Shutdown.</p>
+          <img src="screenshots/queue-manager.png" 
+               alt="Queue Manager" 
+               onerror="this.src='https://raw.githubusercontent.com/aloysiuspattath/neodm/main/docs/screenshots/queue-manager.png'">
+        </div>
+
+        <!-- Feature 6: System Tray & Native Windows Dock -->
+        <div class="bento-card col-6">
+          <div class="card-icon">🔔</div>
+          <h3>Native System Tray Dock & Aero Snap</h3>
+          <p>Zero-footprint background docking with a native Win32 options menu (Show, Pause All, Resume All, Settings, Exit). Clean single-instance window restoration without stealing focus.</p>
+          <div class="cli-box" style="margin-top: 18px;">
+            <div class="cli-comment">// Ultra-lightweight Windows Architecture</div>
+            <div>• <strong style="color: var(--accent);">PerMonitorV2</strong> High-DPI crisp rendering</div>
+            <div>• <strong style="color: var(--accent);">DWM Dark Aero Snap</strong> titlebar integration</div>
+            <div>• <strong style="color: var(--accent);">&lt; 35 MB RAM</strong> average memory footprint</div>
+            <div>• <strong style="color: var(--accent);">&lt; 200 ms</strong> instantaneous cold boot</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Comparison Table -->
+    <section class="bento-section" id="comparison">
+      <div class="section-title">
+        <h2>Architectural Benchmark Comparison</h2>
+        <p>A generational leap forward over legacy 90s-era download managers.</p>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>NeoDM PRO</th>
+              <th>Internet Download Manager (IDM)</th>
+              <th>Free Download Manager (FDM)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Concurrent TCP Streams</td>
+              <td><strong>Up to 32 Dynamic</strong></td>
+              <td>Up to 32 Dynamic</td>
+              <td>Up to 10 Static</td>
+            </tr>
+            <tr>
+              <td>Direct Offset Writing (<code>WriteAt</code>)</td>
+              <td><strong>Yes (0s disk freeze)</strong></td>
+              <td>No (Disk concatenation pause)</td>
+              <td>Partial</td>
+            </tr>
+            <tr>
+              <td>Cold Startup Time</td>
+              <td><strong>&lt; 200 ms</strong></td>
+              <td>~ 800 ms</td>
+              <td>~ 2.5 s</td>
+            </tr>
+            <tr>
+              <td>Memory Footprint</td>
+              <td><strong>&lt; 35 MB RAM</strong></td>
+              <td>~ 45 MB RAM</td>
+              <td>~ 150 MB RAM</td>
+            </tr>
+            <tr>
+              <td>Modern Bento UI (Light / Dark)</td>
+              <td><strong>Yes (Bento 2.0)</strong></td>
+              <td>No (Legacy Win32 GUI)</td>
+              <td>Standard Web</td>
+            </tr>
+            <tr>
+              <td>Silent YouTube Muxing</td>
+              <td><strong>Yes (Zero Terminals)</strong></td>
+              <td>Yes</td>
+              <td>Limited</td>
+            </tr>
+            <tr>
+              <td>Dual CLI & Desktop GUI</td>
+              <td><strong>Yes (<code>neodm</code> CLI)</strong></td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Open Source & Auditable</td>
+              <td><strong>Yes (Pure Go)</strong></td>
+              <td>No (Proprietary)</td>
+              <td>Open Source</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CLI Section -->
+    <section class="bento-section" id="cli">
+      <div class="section-title">
+        <h2>Dual-Engine CLI & GUI</h2>
+        <p>The exact same binary runs as a high-speed terminal utility or desktop app.</p>
+      </div>
+
+      <div class="cli-box">
+        <div class="cli-comment"># Direct high-speed download with automatic progress bar</div>
+        <div><span class="cli-cmd">neodm</span> https://speed.cloudflare.com/__down?bytes=104857600 -o 100mb.bin</div>
+        <br>
+        <div class="cli-comment"># Multi-threaded download with 32 connections and 10MB/s speed cap</div>
+        <div><span class="cli-cmd">neodm download</span> https://example.com/ubuntu-24.04.iso -d D:\ISOs -c 32 -s 10M</div>
+        <br>
+        <div class="cli-comment"># Query active background engine tasks</div>
+        <div><span class="cli-cmd">neodm list</span></div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p>Released under GPLv3. Engineered in pure Go with Microsoft Edge WebView2.</p>
+      <p style="margin-top: 10px;">
+        <a href="https://github.com/aloysiuspattath/neodm" target="_blank" rel="noopener">GitHub Repository</a> • 
+        <a href="https://github.com/aloysiuspattath/neodm/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">User Guide</a> • 
+        <a href="https://github.com/aloysiuspattath/neodm/blob/main/docs/BROWSER_EXTENSION_GUIDE.md" target="_blank" rel="noopener">Browser Extension Guide</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    // Theme toggle handling
+    const toggleBtn = document.getElementById('themeToggle');
+    const root = document.documentElement;
+
+    function setTheme(theme) {
+      root.setAttribute('data-theme', theme);
+      toggleBtn.textContent = theme === 'dark' ? '🌙 Dark' : '☀️ Light';
+      localStorage.setItem('neodm-theme', theme);
+    }
+
+    const savedTheme = localStorage.getItem('neodm-theme') || 'dark';
+    setTheme(savedTheme);
+
+    toggleBtn.addEventListener('click', () => {
+      const current = root.getAttribute('data-theme');
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    });
+
+    // Fetch dynamic GitHub release metadata from edge worker API
+    fetch('/api/release')
+      .then(res => res.json())
+      .then(data => {
+        if (data.version) {
+          const badge = document.getElementById('version-tag');
+          if (badge) badge.textContent = 'Release ' + data.version;
+        }
+      })
+      .catch(() => {});
+  </script>
+</body>
+</html>

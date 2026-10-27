@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Cloudflare Wrangler output
+.wrangler/
+dist/
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+*.log
