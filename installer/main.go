@@ -14,15 +14,67 @@ import (
 func main() {
 	silent := flag.Bool("silent", false, "Perform unattended silent installation")
 	flag.BoolVar(silent, "s", false, "Perform unattended silent installation")
+	uninstall := flag.Bool("uninstall", false, "Uninstall NeoDM from the system")
 	noLaunch := flag.Bool("no-launch", false, "Do not launch NeoDM after installation")
 	flag.Parse()
 
+	// If explicit uninstall flag passed
+	if *uninstall {
+		if !*silent {
+			if !platform.ShowConfirmDialog("Uninstall NeoDM PRO", "Are you sure you want to completely uninstall Neo Download Manager PRO?") {
+				os.Exit(0)
+			}
+		}
+		killCmd := exec.Command("taskkill", "/F", "/IM", "neodm.exe")
+		killCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		_ = killCmd.Run()
+		killCmd2 := exec.Command("taskkill", "/F", "/IM", "ifd.exe")
+		killCmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		_ = killCmd2.Run()
+
+		if err := platform.UninstallApp(); err != nil {
+			if !*silent {
+				platform.ShowInfoDialog("Uninstall Error", fmt.Sprintf("Error during uninstall: %v", err))
+			}
+			os.Exit(1)
+		}
+		if !*silent {
+			platform.ShowInfoDialog("Uninstall Complete", "Neo Download Manager PRO has been completely removed from this computer.")
+		}
+		os.Exit(0)
+	}
+
+	isInstalled := platform.IsAppInstalled()
+	isUpdate := isInstalled
+
+	// Interactive mode: Check if already installed and prompt user for action
 	if !*silent {
-		fmt.Println("==================================================")
-		fmt.Println("   Neo Download Manager PRO (NeoDM) - Setup       ")
-		fmt.Println("==================================================")
-		fmt.Println("Installing NeoDM to:", platform.GetInstallDir())
-		fmt.Println("Deploying components and creating shortcuts...")
+		action := platform.PromptInstallerAction(isInstalled)
+		switch action {
+		case "exit":
+			os.Exit(0)
+		case "uninstall":
+			if !platform.ShowConfirmDialog("Confirm Uninstall", "Are you sure you want to uninstall Neo Download Manager PRO?") {
+				os.Exit(0)
+			}
+			killCmd := exec.Command("taskkill", "/F", "/IM", "neodm.exe")
+			killCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+			_ = killCmd.Run()
+			killCmd2 := exec.Command("taskkill", "/F", "/IM", "ifd.exe")
+			killCmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+			_ = killCmd2.Run()
+
+			if err := platform.UninstallApp(); err != nil {
+				platform.ShowInfoDialog("Uninstall Error", fmt.Sprintf("Error during uninstall: %v", err))
+				os.Exit(1)
+			}
+			platform.ShowInfoDialog("Uninstall Complete", "Neo Download Manager PRO has been uninstalled from your computer.")
+			os.Exit(0)
+		case "update":
+			isUpdate = true
+		case "install":
+			isUpdate = false
+		}
 	}
 
 	// Terminate any running instances first
@@ -35,28 +87,22 @@ func main() {
 
 	err := platform.InstallApp()
 	if err != nil {
-		fmt.Printf("Installation error: %v\n", err)
 		if !*silent {
-			fmt.Println("Press Enter to exit...")
-			var dummy string
-			fmt.Scanln(&dummy)
+			platform.ShowInfoDialog("Setup Error", fmt.Sprintf("Installation failed: %v", err))
 		}
 		os.Exit(1)
 	}
 
 	if !*silent {
-		fmt.Println("✓ Neo Download Manager PRO installed successfully!")
-		fmt.Println("✓ Desktop shortcut created")
-		fmt.Println("✓ Start Menu shortcut created")
-		fmt.Println("✓ Browser Companion Extension installed & registered (Chrome, Edge, Brave, Firefox)")
-		fmt.Println("✓ Windows Add/Remove Programs entry & uninstaller (uninstall.exe) registered")
+		if isUpdate {
+			platform.ShowInfoDialog("NeoDM Updated", "Neo Download Manager PRO has been successfully updated to the latest version!\n\nYour existing downloads, history, and settings have been preserved.")
+		} else {
+			platform.ShowInfoDialog("Setup Complete", "Neo Download Manager PRO has been installed successfully!\n\nDesktop shortcuts and browser companion extensions are ready.")
+		}
 	}
 
 	// Launch installed app if requested
 	if !*noLaunch {
-		if !*silent {
-			fmt.Println("Launching Neo Download Manager PRO...")
-		}
 		installedExe := filepath.Join(platform.GetInstallDir(), "neodm.exe")
 		launchCmd := exec.Command(installedExe)
 		launchCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}

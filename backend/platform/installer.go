@@ -28,17 +28,174 @@ const (
 )
 
 var (
-	user32DLL       = syscall.NewLazyDLL("user32.dll")
-	procMessageBoxW = user32DLL.NewProc("MessageBoxW")
+	user32DLL              = syscall.NewLazyDLL("user32.dll")
+	comctl32DLL            = syscall.NewLazyDLL("comctl32.dll")
+	procMessageBoxW        = user32DLL.NewProc("MessageBoxW")
+	procTaskDialogIndirect = comctl32DLL.NewProc("TaskDialogIndirect")
 )
 
 const (
 	MB_OK              = 0x00000000
 	MB_YESNO           = 0x00000004
+	MB_YESNOCANCEL     = 0x00000003
 	MB_ICONQUESTION    = 0x00000020
 	MB_ICONINFORMATION = 0x00000040
 	IDYES              = 6
+	IDNO               = 7
+	IDCANCEL           = 2
 )
+
+type taskDialogButton struct {
+	nButtonID     int32
+	padding       int32
+	pszButtonText *uint16
+}
+
+type taskDialogConfig struct {
+	cbSize                  uint32
+	padding1                uint32
+	hwndParent              uintptr
+	hInstance               uintptr
+	dwFlags                 uint32
+	dwCommonButtons         uint32
+	pszWindowTitle          *uint16
+	hMainIcon               uintptr
+	pszMainInstruction      *uint16
+	pszContent              *uint16
+	cButtons                uint32
+	padding2                uint32
+	pButtons                *taskDialogButton
+	nDefaultButton          int32
+	cRadioButtons           uint32
+	pRadioButtons           uintptr
+	nDefaultRadioButton     int32
+	padding3                uint32
+	pszVerificationText     *uint16
+	pszExpandedInformation  *uint16
+	pszExpandedControlText  *uint16
+	pszCollapsedControlText *uint16
+	hFooterIcon             uintptr
+	pszFooter               *uint16
+	pfCallback              uintptr
+	lpCallbackData          uintptr
+	cxWidth                 uint32
+	padding4                uint32
+}
+
+// IsAppInstalled checks if NeoDM is currently installed on the host
+func IsAppInstalled() bool {
+	exe := filepath.Join(GetInstallDir(), "neodm.exe")
+	if fi, err := os.Stat(exe); err == nil && !fi.IsDir() {
+		return true
+	}
+	if k, err := registry.OpenKey(registry.CURRENT_USER, uninstallRegKey, registry.QUERY_VALUE); err == nil {
+		k.Close()
+		return true
+	}
+	return false
+}
+
+// PromptInstallerAction displays an interactive TaskDialog allowing the user to Update, Install, Uninstall, or Exit
+func PromptInstallerAction(isInstalled bool) string {
+	title, _ := syscall.UTF16PtrFromString("Neo Download Manager PRO Setup")
+
+	if isInstalled {
+		instruction, _ := syscall.UTF16PtrFromString("NeoDM PRO is already installed")
+		content, _ := syscall.UTF16PtrFromString("An existing installation of Neo Download Manager PRO was detected on this PC.\nWhat would you like to do?")
+
+		btnUpdateText, _ := syscall.UTF16PtrFromString("Update / Reinstall NeoDM\nUpgrade to the latest version while preserving your settings and downloads.")
+		btnUninstallText, _ := syscall.UTF16PtrFromString("Uninstall NeoDM\nCompletely remove NeoDM and its browser extensions from this computer.")
+
+		buttons := []taskDialogButton{
+			{nButtonID: 101, pszButtonText: btnUpdateText},
+			{nButtonID: 102, pszButtonText: btnUninstallText},
+		}
+
+		var config taskDialogConfig
+		config.cbSize = uint32(unsafe.Sizeof(config))
+		config.dwFlags = 0x0010 | 0x0008 // TDF_USE_COMMAND_LINKS | TDF_ALLOW_DIALOG_CANCELLATION
+		config.dwCommonButtons = 0x0010        // TDCBF_CANCEL_BUTTON
+		config.pszWindowTitle = title
+		config.pszMainInstruction = instruction
+		config.pszContent = content
+		config.cButtons = uint32(len(buttons))
+		config.pButtons = &buttons[0]
+
+		var buttonPressed int32
+		if procTaskDialogIndirect.Find() == nil {
+			ret, _, _ := procTaskDialogIndirect.Call(
+				uintptr(unsafe.Pointer(&config)),
+				uintptr(unsafe.Pointer(&buttonPressed)),
+				0,
+				0,
+			)
+			if ret == 0 {
+				switch buttonPressed {
+				case 101:
+					return "update"
+				case 102:
+					return "uninstall"
+				default:
+					return "exit"
+				}
+			}
+		}
+
+		// Fallback to Win32 MessageBox
+		m, _ := syscall.UTF16PtrFromString("Neo Download Manager PRO is already installed on this computer.\n\n• Click 'Yes' to Update / Reinstall\n• Click 'No' to Uninstall\n• Click 'Cancel' to Exit")
+		ret, _, _ := procMessageBoxW.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(title)), uintptr(MB_YESNOCANCEL|MB_ICONQUESTION))
+		switch ret {
+		case uintptr(IDYES):
+			return "update"
+		case uintptr(IDNO):
+			return "uninstall"
+		default:
+			return "exit"
+		}
+	} else {
+		instruction, _ := syscall.UTF16PtrFromString("Install Neo Download Manager PRO")
+		content, _ := syscall.UTF16PtrFromString("Deploy NeoDM PRO with 5x-10x download acceleration, zero concatenation freeze, and browser integration.")
+
+		btnInstallText, _ := syscall.UTF16PtrFromString("Install NeoDM PRO\nDeploy to AppData\\Programs\\NeoDM and configure browser companion extensions.")
+		buttons := []taskDialogButton{
+			{nButtonID: 101, pszButtonText: btnInstallText},
+		}
+
+		var config taskDialogConfig
+		config.cbSize = uint32(unsafe.Sizeof(config))
+		config.dwFlags = 0x0010 | 0x0008 // TDF_USE_COMMAND_LINKS | TDF_ALLOW_DIALOG_CANCELLATION
+		config.dwCommonButtons = 0x0010        // TDCBF_CANCEL_BUTTON
+		config.pszWindowTitle = title
+		config.pszMainInstruction = instruction
+		config.pszContent = content
+		config.cButtons = uint32(len(buttons))
+		config.pButtons = &buttons[0]
+
+		var buttonPressed int32
+		if procTaskDialogIndirect.Find() == nil {
+			ret, _, _ := procTaskDialogIndirect.Call(
+				uintptr(unsafe.Pointer(&config)),
+				uintptr(unsafe.Pointer(&buttonPressed)),
+				0,
+				0,
+			)
+			if ret == 0 {
+				if buttonPressed == 101 {
+					return "install"
+				}
+				return "exit"
+			}
+		}
+
+		// Fallback to Win32 MessageBox
+		m, _ := syscall.UTF16PtrFromString("Do you want to install Neo Download Manager PRO on this computer?")
+		ret, _, _ := procMessageBoxW.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(title)), uintptr(MB_YESNO|MB_ICONQUESTION))
+		if ret == uintptr(IDYES) {
+			return "install"
+		}
+		return "exit"
+	}
+}
 
 // ShowConfirmDialog displays a native Windows confirmation dialog (Yes/No)
 func ShowConfirmDialog(title, message string) bool {
