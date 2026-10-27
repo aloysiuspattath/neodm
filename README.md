@@ -1,6 +1,7 @@
 # Neo Download Manager PRO (NeoDM)
 
-[![GitHub Release](https://img.shields.io/badge/Release-v1.1.7-blue.svg?logo=github)](https://github.com/aloysiuspattath/neodm/releases)
+[![GitHub Release](https://img.shields.io/badge/Release-v1.1.8-blue.svg?logo=github)](https://github.com/aloysiuspattath/neodm/releases)
+[![WinGet Package](https://img.shields.io/badge/WinGet-Validation%20Passed%20(10%2F10)-success?logo=windows11)](https://github.com/microsoft/winget-pkgs/pull/462854)
 [![Build & Tests](https://img.shields.io/badge/Tests-29%20Passing%20(100%25)-success?logo=go)](https://golang.org)
 [![User Guide](https://img.shields.io/badge/Docs-User%20Guide-blueviolet?logo=read-the-docs)](docs/GUIDE.md)
 [![Extension Guide](https://img.shields.io/badge/Docs-Browser%20Extension-orange?logo=googlechrome)](docs/BROWSER_EXTENSION_GUIDE.md)
@@ -67,7 +68,7 @@ Comprehensive documentation and step-by-step walkthroughs are available in the r
 
 ### 🎥 2. Silent YouTube & Video Grabber
 - **Full Video + Audio Muxing**: Downloads 1080p (Full HD), 720p, 480p, 360p, or Audio-Only (MP3/M4A) with video and audio merged into a pristine MP4 container via `ffmpeg`.
-- **Browser Media Stream Sniffer**: Automatically detects streaming videos on YouTube, Vimeo, Twitch, Twitter/X, TikTok, and HTML5 sites. Injects an ergonomic floating badge (`⚡ Download with NeoDM`) on video players and adds a 1-click context menu option (`Download Media with NeoDM`) that captures the media page directly.
+- **Browser Media Stream Sniffer**: Automatically detects streaming videos on YouTube, Vimeo, Twitch, Twitter/X, TikTok, and HTML5 sites. Streamlined to clean native right-click context menu options (`Download with NeoDM` and `Download Media with NeoDM`) with zero intrusive floating page overlays.
 - **Zero Terminal Windows**: All video analysis and downloading executes in silent background mode (`HideWindow: true`)—no flashing command prompt popups.
 - **Real-Time Telemetry**: Real-time speed metrics, ETA countdown, and progress bar directly within the Bento interface.
 
@@ -94,6 +95,8 @@ Comprehensive documentation and step-by-step walkthroughs are available in the r
 - **One-Click Folder Revealer**: Opens Windows Explorer with the downloaded file pre-selected and highlighted.
 
 ### 🔄 6. Smart Setup & Lifecycle Management
+- **True Standalone Self-Extracting Installer (`NeoDM-PRO-Setup.exe`)**: Embeds the full application payload, icons, and browser companion directly inside the binary via Go embed. Requires zero dependencies or auxiliary files.
+- **Windows Package Manager (`winget`) Ready**: Official package manifest conforms to schema 1.12 with all 10 automated sandbox checks passed.
 - **Interactive Setup Wizard**: Running `NeoDM-PRO-Setup.exe` on an existing installation presents an interactive menu with **Update / Reinstall**, **Uninstall**, or **Cancel / Exit**.
 - **Preserved Settings & Downloads**: Updating preserves all download records, queue schedules, category directories, and custom settings intact.
 - **Seamless Relaunch**: Setup cleanly releases background sockets and file handles before launching the upgraded instance with full hardware acceleration and isolated user data cache (`%LOCALAPPDATA%\NeoDM\WebView2Data`).
