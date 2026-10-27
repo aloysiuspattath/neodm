@@ -9,6 +9,7 @@ type TrayCallbacks struct {
 	OnPauseAll    func()
 	OnAddDownload func()
 	OnSettings    func()
+	OnRestart     func()
 	OnExit        func()
 }
 

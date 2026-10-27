@@ -57,7 +57,7 @@ function setupContextMenus() {
     chrome.contextMenus.create({
       id: 'neodm-download-media',
       title: 'Download Media with NeoDM',
-      contexts: ['image', 'video', 'audio']
+      contexts: ['video', 'audio', 'image', 'page', 'frame']
     });
 
     chrome.contextMenus.create({
@@ -75,8 +75,17 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await sendToNeoDM(info.linkUrl, tab);
     }
   } else if (info.menuItemId === 'neodm-download-media' || info.menuItemId === 'ifd-download-media') {
-    if (info.srcUrl) {
-      await sendToNeoDM(info.srcUrl, tab);
+    let targetUrl = info.srcUrl;
+    // On video platforms (YouTube, Vimeo, etc.), or if right-clicked on an overlay/page/frame,
+    // or if srcUrl is missing / a blob: or data: URL, fallback to tab.url
+    if (!targetUrl || targetUrl.startsWith('blob:') || targetUrl.startsWith('data:')) {
+      if (tab && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        targetUrl = tab.url;
+      }
+    }
+    if (targetUrl) {
+      const suggestedName = (tab && tab.title) ? tab.title : '';
+      await sendToNeoDM(targetUrl, tab, suggestedName);
     }
   } else if (info.menuItemId === 'neodm-download-page' || info.menuItemId === 'ifd-download-page') {
     if (tab && tab.url) {

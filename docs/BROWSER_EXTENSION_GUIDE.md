@@ -144,13 +144,13 @@ Click the NeoDM extension icon in your browser toolbar to open the quick setting
 
 ---
 
-## 🎥 YouTube & Media Capture
+## 🎥 YouTube & Media Stream Sniffing
 
-When browsing video platforms such as YouTube, Vimeo, or HTML5 media sites:
-1. Click the **NeoDM Extension icon** on your toolbar.
-2. Select **"Capture Media on Page"**.
-3. The extension scans the page DOM and network requests for video and audio streams.
-4. Click **Download with NeoDM** to send the stream URL directly into NeoDM's built-in **Silent Video Downloader**, where you can select 1080p, 720p, or Audio Extraction!
+When browsing video platforms such as YouTube, Vimeo, Twitch, Twitter/X, TikTok, or HTML5 media sites:
+1. **Floating Download Pill**: NeoDM automatically injects a sleek, unobtrusive badge (`⚡ Download with NeoDM`) in the top corner of active video players. Clicking this immediately sends the video stream to NeoDM.
+2. **Right-Click Context Menu**: Right-click anywhere on the video player, overlay, or webpage and select **"Download Media with NeoDM"**.
+3. **Extension Popup**: Or click the **NeoDM Extension icon** on your browser toolbar and click **"Capture Media on Page"**.
+4. **Full Audio + Video Muxing**: NeoDM's engine automatically downloads the highest quality video and audio streams and merges them into a clean `.mp4` file via `ffmpeg` in silent background mode.
 
 ---
 
@@ -158,9 +158,10 @@ When browsing video platforms such as YouTube, Vimeo, or HTML5 media sites:
 
 ### Extension says "Engine Disconnected" or "Cannot connect to NeoDM"
 1. **Ensure NeoDM is Running**: The desktop application must be open (or minimized to the Windows system tray) to receive downloads.
-2. **Verify Port Availability**: NeoDM's local HTTP API runs on port `8998`. If another application is using port 8998, check NeoDM's **Settings** → **Port Configuration**.
-3. **Check Firewall Software**: Some third-party antivirus suites restrict loopback connections (`127.0.0.1`). Ensure loopback traffic to port `8998` is allowed.
-4. **Re-Register Native Messaging**: In NeoDM, go to **Tools** → **Browser Integration** and click **Re-register Native Host**.
+2. **Dual Port Support**: NeoDM automatically binds to port `8998` with transparent fallback to `19765`. The extension automatically pings both ports with zero configuration needed.
+3. **Quick Restart**: If background processes were updated, right-click the system tray icon and select **"Restart NeoDM"** or click **"🔄 Restart NeoDM"** in the in-app Settings dialog.
+4. **Check Firewall Software**: Some third-party antivirus suites restrict loopback connections (`127.0.0.1`). Ensure loopback traffic to ports `8998` and `19765` is allowed.
+5. **Re-Register Native Messaging**: In NeoDM, go to **Tools** → **Browser Integration** and click **Re-register Native Host**.
 
 ---
 

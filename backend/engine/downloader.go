@@ -484,8 +484,8 @@ func (t *Task) Start() {
 
 	t.engine.updateTask(t)
 
-	// Step 0: Intercept YouTube video streams and capture with full video + audio muxing via yt-dlp silently
-	if isYouTubeURL(t.URL) {
+	// Step 0: Intercept media streams and capture with full video + audio muxing via yt-dlp silently
+	if isMediaStreamURL(t.URL) {
 		t.startYouTubeDownload()
 		return
 	}
@@ -606,8 +606,27 @@ func (t *Task) Start() {
 	}
 }
 
+func isMediaStreamURL(rawURL string) bool {
+	u := strings.ToLower(rawURL)
+	return strings.Contains(u, "youtube.com/") ||
+		strings.Contains(u, "youtu.be/") ||
+		strings.Contains(u, "vimeo.com/") ||
+		strings.Contains(u, "twitch.tv/") ||
+		strings.Contains(u, "twitter.com/") ||
+		strings.Contains(u, "x.com/") ||
+		strings.Contains(u, "tiktok.com/") ||
+		strings.Contains(u, "facebook.com/") ||
+		strings.Contains(u, "fb.watch/") ||
+		strings.Contains(u, "instagram.com/") ||
+		strings.Contains(u, "reddit.com/") ||
+		strings.Contains(u, "dailymotion.com/") ||
+		strings.Contains(u, "soundcloud.com/") ||
+		strings.HasSuffix(strings.Split(u, "?")[0], ".m3u8") ||
+		strings.HasSuffix(strings.Split(u, "?")[0], ".mpd")
+}
+
 func isYouTubeURL(rawURL string) bool {
-	return strings.Contains(rawURL, "youtube.com/") || strings.Contains(rawURL, "youtu.be/")
+	return isMediaStreamURL(rawURL)
 }
 
 func (t *Task) startYouTubeDownload() {
@@ -658,7 +677,7 @@ func (t *Task) startYouTubeDownload() {
 	}
 	baseFilename = strings.TrimPrefix(strings.TrimPrefix(baseFilename, "- "), "-")
 	baseFilename = strings.TrimSpace(baseFilename)
-	if baseFilename == "" || baseFilename == "video" || baseFilename == "YouTube_Video" || baseFilename == "watch" || baseFilename == "YouTube" || baseFilename == "- YouTube" || baseFilename == "downloaded_video" || strings.HasPrefix(baseFilename, "-") {
+	if baseFilename == "" || baseFilename == "video" || baseFilename == "YouTube_Video" || baseFilename == "Video_Download" || baseFilename == "media_download" || baseFilename == "media_stream" || baseFilename == "watch" || baseFilename == "YouTube" || baseFilename == "- YouTube" || baseFilename == "downloaded_video" || strings.HasPrefix(baseFilename, "-") {
 		baseFilename = "%(title)s"
 	}
 

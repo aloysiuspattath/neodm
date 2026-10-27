@@ -67,12 +67,14 @@ Comprehensive documentation and step-by-step walkthroughs are available in the r
 
 ### 🎥 2. Silent YouTube & Video Grabber
 - **Full Video + Audio Muxing**: Downloads 1080p (Full HD), 720p, 480p, 360p, or Audio-Only (MP3/M4A) with video and audio merged into a pristine MP4 container via `ffmpeg`.
+- **Browser Media Stream Sniffer**: Automatically detects streaming videos on YouTube, Vimeo, Twitch, Twitter/X, TikTok, and HTML5 sites. Injects an ergonomic floating badge (`⚡ Download with NeoDM`) on video players and adds a 1-click context menu option (`Download Media with NeoDM`) that captures the media page directly.
 - **Zero Terminal Windows**: All video analysis and downloading executes in silent background mode (`HideWindow: true`)—no flashing command prompt popups.
 - **Real-Time Telemetry**: Real-time speed metrics, ETA countdown, and progress bar directly within the Bento interface.
 
 ### 🌐 3. Browser Companion Extension (Manifest V3)
 - Supports **Google Chrome**, **Microsoft Edge**, **Brave**, **Opera**, and **Mozilla Firefox**.
 - **1-Click Auto-Registration**: Installer and in-app settings automatically configure Windows Registry keys for Chrome, Edge, and Firefox.
+- **1-Click Browser Launchers**: Launch Chrome, Edge, or Brave directly into the extension management screen from NeoDM's Browser Integration dialog with 1 click.
 - **Automatic Interception**: Intercepts downloadable links (`.iso`, `.zip`, `.exe`, `.tar.gz`, `.mp4`, `.pdf`).
 - **Authentication & Cookie Forwarding**: Forwards session cookies and authorization headers to download from private portals, Google Drive, Mega, and internal servers.
 - **Dynamic In-App Path Detection**: 1-click button to copy extension path or reveal folder directly in Windows Explorer.
@@ -90,6 +92,12 @@ Comprehensive documentation and step-by-step walkthroughs are available in the r
 - **Queue Scheduler & Power Management**: Main and Night download queues with automated start/stop times and automatic computer shutdown upon completion.
 - **Token-Bucket Bandwidth Limiter**: Global and per-download speed throttles.
 - **One-Click Folder Revealer**: Opens Windows Explorer with the downloaded file pre-selected and highlighted.
+
+### 🔄 6. Smart Setup & Lifecycle Management
+- **Interactive Setup Wizard**: Running `NeoDM-PRO-Setup.exe` on an existing installation presents an interactive menu with **Update / Reinstall**, **Uninstall**, or **Cancel / Exit**.
+- **Preserved Settings & Downloads**: Updating preserves all download records, queue schedules, category directories, and custom settings intact.
+- **Seamless Relaunch**: Setup cleanly releases background sockets and file handles before launching the upgraded instance with full hardware acceleration and isolated user data cache (`%LOCALAPPDATA%\NeoDM\WebView2Data`).
+- **Zero-Friction Restart**: 1-click **Restart NeoDM** in the system tray menu and Settings modal for clean restarts of background services.
 
 ---
 

@@ -420,3 +420,32 @@ func TestConflictActionOverwriteAndRename(t *testing.T) {
 		t.Errorf("Expected ConflictAction 'overwrite', got '%s'", tOverwrite.ConflictAction)
 	}
 }
+
+func TestMediaStreamURLDetection(t *testing.T) {
+	validStreams := []string{
+		"https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+		"https://youtu.be/dQw4w9WgXcQ",
+		"https://vimeo.com/12345678",
+		"https://twitch.tv/channel",
+		"https://twitter.com/user/status/999",
+		"https://x.com/user/status/999",
+		"https://tiktok.com/@creator/video/111",
+		"https://stream.server.com/live/index.m3u8",
+		"https://stream.server.com/dash/video.mpd",
+	}
+	for _, u := range validStreams {
+		if !isMediaStreamURL(u) {
+			t.Errorf("Expected isMediaStreamURL(%q) to be true", u)
+		}
+	}
+
+	invalidStreams := []string{
+		"https://archive.org/download/item/file.iso",
+		"https://releases.ubuntu.com/24.04/ubuntu.iso",
+	}
+	for _, u := range invalidStreams {
+		if isMediaStreamURL(u) {
+			t.Errorf("Expected isMediaStreamURL(%q) to be false", u)
+		}
+	}
+}

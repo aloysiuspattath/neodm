@@ -2303,9 +2303,25 @@ function initModals() {
   const btnSaveSettings = document.getElementById('btn-save-settings');
   if (btnSaveSettings) btnSaveSettings.addEventListener('click', saveSettingsFromModal);
 
-  // Settings Reset
+  // Settings Reset & Restart
   const btnResetDefaults = document.getElementById('btn-reset-defaults');
   if (btnResetDefaults) btnResetDefaults.addEventListener('click', resetSettingsToDefaults);
+
+  const btnRestartApp = document.getElementById('btn-restart-app');
+  if (btnRestartApp) {
+    btnRestartApp.addEventListener('click', async () => {
+      if (confirm('Restart NeoDM and background download services now?')) {
+        btnRestartApp.disabled = true;
+        btnRestartApp.textContent = 'Restarting...';
+        try {
+          await fetch('/api/app/restart', { method: 'POST' });
+        } catch (e) {}
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      }
+    });
+  }
 
   // Settings tab switching
   document.querySelectorAll('.settings-tabs-sidebar .settings-tab-btn').forEach(btn => {

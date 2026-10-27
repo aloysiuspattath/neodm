@@ -577,3 +577,15 @@ func copyDir(src, dst string) error {
 	}
 	return nil
 }
+
+// RestartApp gracefully launches a fresh instance of NeoDM and exits the current process.
+func RestartApp() {
+	exe, err := os.Executable()
+	if err != nil {
+		exe = filepath.Join(GetInstallDir(), "neodm.exe")
+	}
+	cmd := exec.Command(exe)
+	cmd.Dir = filepath.Dir(exe)
+	_ = cmd.Start()
+	os.Exit(0)
+}

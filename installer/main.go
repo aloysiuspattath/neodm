@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"ifd/backend/platform"
 )
@@ -84,6 +85,7 @@ func main() {
 	killCmd2 := exec.Command("taskkill", "/F", "/IM", "ifd.exe")
 	killCmd2.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	_ = killCmd2.Run()
+	time.Sleep(500 * time.Millisecond)
 
 	err := platform.InstallApp()
 	if err != nil {
@@ -105,7 +107,9 @@ func main() {
 	if !*noLaunch {
 		installedExe := filepath.Join(platform.GetInstallDir(), "neodm.exe")
 		launchCmd := exec.Command(installedExe)
-		launchCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		launchCmd.Dir = platform.GetInstallDir()
+		// Do NOT set HideWindow: true on GUI application, as it passes SW_HIDE into STARTUPINFO
+		// causing WebView2 compositor to fail surface creation (blank screen).
 		_ = launchCmd.Start()
 	}
 }

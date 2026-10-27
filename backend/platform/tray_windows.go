@@ -141,6 +141,7 @@ type TrayCallbacks struct {
 	OnPauseAll    func()
 	OnAddDownload func()
 	OnSettings    func()
+	OnRestart     func()
 	OnExit        func()
 }
 
@@ -347,7 +348,8 @@ func (tm *TrayManager) showContextMenu(hwnd uintptr) {
 	procAppendMenu.Call(hMenu, MF_SEPARATOR, 0, 0)
 	appendMenuItem(hMenu, 5, "Settings")
 	procAppendMenu.Call(hMenu, MF_SEPARATOR, 0, 0)
-	appendMenuItem(hMenu, 6, "Exit NeoDM")
+	appendMenuItem(hMenu, 6, "Restart NeoDM")
+	appendMenuItem(hMenu, 7, "Exit NeoDM")
 
 	var pt POINT
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
@@ -379,6 +381,12 @@ func (tm *TrayManager) showContextMenu(hwnd uintptr) {
 			tm.callbacks.OnSettings()
 		}
 	case 6:
+		if tm.callbacks.OnRestart != nil {
+			tm.callbacks.OnRestart()
+		} else {
+			RestartApp()
+		}
+	case 7:
 		if tm.callbacks.OnExit != nil {
 			tm.callbacks.OnExit()
 		} else {

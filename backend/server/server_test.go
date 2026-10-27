@@ -680,3 +680,91 @@ func TestCheckFileExistsAPI(t *testing.T) {
 		t.Errorf("Expected suggestedRename = 'testfile (1).iso', got '%s'", resp2.SuggestedRename)
 	}
 }
+
+func TestMediaPlatformDetection(t *testing.T) {
+	mediaURLs := []string{
+		"https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+		"https://youtu.be/dQw4w9WgXcQ",
+		"https://vimeo.com/12345678",
+		"https://twitch.tv/streamer",
+		"https://twitter.com/user/status/123",
+		"https://x.com/user/status/123",
+		"https://tiktok.com/@user/video/123",
+		"https://example.com/live/playlist.m3u8",
+		"https://example.com/stream/manifest.mpd",
+	}
+	for _, u := range mediaURLs {
+		if !isMediaPlatformURL(u) {
+			t.Errorf("Expected isMediaPlatformURL(%q) to be true", u)
+		}
+	}
+
+	nonMediaURLs := []string{
+		"https://example.com/file.zip",
+		"https://download.mozilla.org/?product=firefox",
+		"https://github.com/archive.tar.gz",
+	}
+	for _, u := range nonMediaURLs {
+		if isMediaPlatformURL(u) {
+			t.Errorf("Expected isMediaPlatformURL(%q) to be false", u)
+		}
+	}
+}
+
+func TestGenericVideoTitle(t *testing.T) {
+	generic := []string{"", "watch", "video", "video.mp4", "media_download", "media_stream", "- YouTube", "youtube", "- Some Title"}
+	for _, g := range generic {
+		if !isGenericVideoTitle(g) {
+			t.Errorf("Expected isGenericVideoTitle(%q) to be true", g)
+		}
+	}
+
+	specific := []string{"Great Video Presentation", "My Podcast Episode 1"}
+	for _, s := range specific {
+		if isGenericVideoTitle(s) {
+			t.Errorf("Expected isGenericVideoTitle(%q) to be false", s)
+		}
+	}
+}
+
+func TestMediaStreamAddDownload(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "neodm-media-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, err := engine.NewStoreWithPath(tmpDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eng := engine.NewEngine(store)
+	srv := NewServer(eng, store, nil, "127.0.0.1:0")
+
+	payload := AddDownloadReq{
+		URL:      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+		Filename: "watch",
+		SaveDir:  tmpDir,
+	}
+	body, _ := json.Marshal(payload)
+	req := httptest.NewRequest("POST", "/api/download/add", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.handleAddDownload(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("handleAddDownload failed with %d: %s", rec.Code, rec.Body.String())
+	}
+
+	tasks := eng.GetAllTasks()
+	if len(tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(tasks))
+	}
+	task := tasks[0]
+	// Verify that the original URL is preserved so yt-dlp receives the real video page
+	if task.URL != "https://www.youtube.com/watch?v=dQw4w9WgXcQ" {
+		t.Errorf("Expected URL to be preserved as YouTube page URL, got %s", task.URL)
+	}
+	if task.Category != "Videos" {
+		t.Errorf("Expected Category to be 'Videos', got %s", task.Category)
+	}
+}

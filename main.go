@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -107,36 +106,44 @@ func main() {
 	}
 
 	// 4. Start local daemon server
-	addr := fmt.Sprintf("127.0.0.1:%d", *port)
-	srv := server.NewServer(eng, store, subFS, addr)
-
-	// Listen on port
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		log.Printf("Port %s already active: %v", addr, err)
-		// Check if an existing healthy instance is running and notify it to show
-		client := &http.Client{Timeout: 800 * time.Millisecond}
-		resp, postErr := client.Post(fmt.Sprintf("http://%s/api/window/action", addr), "application/json", strings.NewReader(`{"action":"show"}`))
-		if postErr == nil && resp.StatusCode == http.StatusOK {
-			_ = resp.Body.Close()
-			return
-		}
-
-		// Port is held by an unresponsive/zombie process or dead instance.
-		// Clean up zombie processes and retry binding standard port.
-		_ = exec.Command("taskkill", "/F", "/IM", "neodm.exe").Run()
-		time.Sleep(300 * time.Millisecond)
-
-		listener, err = net.Listen("tcp", addr)
-		if err != nil {
-			// If standard port remains unavailable, bind to an ephemeral port
-			listener, err = net.Listen("tcp", "127.0.0.1:0")
-			if err != nil {
-				log.Fatalf("Failed to bind any port: %v", err)
-			}
-			addr = listener.Addr().String()
+	candidatePorts := []int{*port, 8998, 19765}
+	if *port == 19765 {
+		candidatePorts = []int{8998, 19765}
+	}
+	var listener net.Listener
+	var boundAddr string
+	for _, p := range candidatePorts {
+		testAddr := fmt.Sprintf("127.0.0.1:%d", p)
+		l, err := net.Listen("tcp", testAddr)
+		if err == nil {
+			listener = l
+			boundAddr = testAddr
+			break
 		}
 	}
+
+	if listener == nil {
+		// Check if an existing healthy instance is running and notify it to show
+		for _, p := range []int{8998, 19765} {
+			checkAddr := fmt.Sprintf("127.0.0.1:%d", p)
+			client := &http.Client{Timeout: 800 * time.Millisecond}
+			resp, postErr := client.Post(fmt.Sprintf("http://%s/api/window/action", checkAddr), "application/json", strings.NewReader(`{"action":"show"}`))
+			if postErr == nil && resp.StatusCode == http.StatusOK {
+				_ = resp.Body.Close()
+				return
+			}
+		}
+
+		// Fallback to ephemeral port
+		var err error
+		listener, err = net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			log.Fatalf("Failed to bind any port: %v", err)
+		}
+		boundAddr = listener.Addr().String()
+	}
+	addr := boundAddr
+	srv := server.NewServer(eng, store, subFS, addr)
 
 	go func() {
 		if err := srv.StartWithListener(listener); err != nil {
@@ -181,6 +188,12 @@ func main() {
 			if activeWebView != nil {
 				activeWebView.Eval("openSettingsModal();")
 			}
+		},
+		OnRestart: func() {
+			if tray != nil {
+				tray.Destroy()
+			}
+			platform.RestartApp()
 		},
 		OnExit: func() {
 			if tray != nil {
@@ -251,7 +264,15 @@ func formatSpeed(b int64) string {
 }
 
 func openWebView(url string, startMinimized bool, onReady func(w webview2.WebView)) {
+	localAppData := os.Getenv("LOCALAPPDATA")
+	var dataPath string
+	if localAppData != "" {
+		dataPath = filepath.Join(localAppData, "NeoDM", "WebView2Data")
+		_ = os.MkdirAll(dataPath, 0755)
+	}
+
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
+		DataPath:  dataPath,
 		Debug:     false,
 		AutoFocus: true,
 		WindowOptions: webview2.WindowOptions{

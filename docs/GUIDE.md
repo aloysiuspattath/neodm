@@ -254,6 +254,12 @@ Make sure your system has an active internet connection. If downloading age-rest
 ### Q: Does NeoDM work on Windows 10 and Windows 11?
 Yes! NeoDM is fully optimized for Windows 10 and Windows 11 with PerMonitorV2 High-DPI scaling, DWM Dark Aero Snap, and native Win32 system tray support.
 
+### Q: How do I update NeoDM?
+Simply run `NeoDM-PRO-Setup.exe` at any time. The installer automatically detects your existing installation and prompts you with **Update / Reinstall**, **Uninstall**, or **Exit**. Updating preserves all your downloads, history, categories, and settings while seamlessly upgrading the binary and components.
+
+### Q: How do I restart NeoDM if needed?
+Right-click the NeoDM icon in the Windows system tray and click **"Restart NeoDM"**, or open the in-app Settings dialog and click **"🔄 Restart NeoDM"**. This cleanly restarts the background server, engine, and interface without needing task manager or manual command prompt kills.
+
 ---
 
 *For bug reports, feature requests, or contributions, visit the [NeoDM GitHub Repository](https://github.com/aloysiuspattath/neodm).*

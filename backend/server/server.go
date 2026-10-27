@@ -104,6 +104,7 @@ func (s *Server) StartWithListener(l net.Listener) error {
 	mux.HandleFunc("/api/window/action", s.cors(s.handleWindowAction))
 	mux.HandleFunc("/api/clipboard/read", s.cors(s.handleReadClipboard))
 	mux.HandleFunc("/api/file/check_exists", s.cors(s.handleCheckFileExists))
+	mux.HandleFunc("/api/app/restart", s.cors(s.handleAppRestart))
 
 	// Static frontend
 	if s.frontend != nil {
@@ -199,21 +200,25 @@ func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 
 	downloadURL := req.URL
 	downloadFilename := req.Filename
-	if strings.Contains(req.URL, "youtube.com") || strings.Contains(req.URL, "youtu.be") {
+	taskCategory := ""
+	taskQuality := ""
+
+	if isMediaPlatformURL(req.URL) {
+		taskCategory = "Videos"
+		taskQuality = "1080p"
 		if s.videoAnalyzer != nil {
-			if vInfo, vErr := s.videoAnalyzer.Analyze(r.Context(), req.URL); vErr == nil && vInfo.BestURL != "" {
-				downloadURL = vInfo.BestURL
-				if downloadFilename == "" || downloadFilename == "watch" || downloadFilename == "video" || downloadFilename == "- YouTube" || strings.HasPrefix(downloadFilename, "-") {
+			if vInfo, vErr := s.videoAnalyzer.Analyze(r.Context(), req.URL); vErr == nil {
+				if downloadFilename == "" || isGenericVideoTitle(downloadFilename) {
 					downloadFilename = vInfo.Filename
 				}
 			}
 		}
-		if downloadFilename == "" || downloadFilename == "watch" || downloadFilename == "video" || downloadFilename == "- YouTube" || strings.HasPrefix(downloadFilename, "-") {
-			downloadFilename = "YouTube_Video.mp4"
+		if downloadFilename == "" || isGenericVideoTitle(downloadFilename) {
+			downloadFilename = "Video_Download.mp4"
 		}
 	}
 
-	task, err := s.engine.AddTaskWithConflict(downloadURL, downloadFilename, req.SaveDir, cleanHeaders, targetQueue, "", "", req.ConflictAction)
+	task, err := s.engine.AddTaskWithConflict(downloadURL, downloadFilename, req.SaveDir, cleanHeaders, targetQueue, taskCategory, taskQuality, req.ConflictAction)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1059,4 +1064,55 @@ func (s *Server) handleSystemDrives(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"drives":  drives,
 	})
+}
+
+func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Restarting NeoDM...",
+	})
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		platform.RestartApp()
+	}()
+}
+
+func isMediaPlatformURL(rawURL string) bool {
+	u := strings.ToLower(rawURL)
+	return strings.Contains(u, "youtube.com/") ||
+		strings.Contains(u, "youtu.be/") ||
+		strings.Contains(u, "vimeo.com/") ||
+		strings.Contains(u, "twitch.tv/") ||
+		strings.Contains(u, "twitter.com/") ||
+		strings.Contains(u, "x.com/") ||
+		strings.Contains(u, "tiktok.com/") ||
+		strings.Contains(u, "facebook.com/") ||
+		strings.Contains(u, "fb.watch/") ||
+		strings.Contains(u, "instagram.com/") ||
+		strings.Contains(u, "reddit.com/") ||
+		strings.Contains(u, "dailymotion.com/") ||
+		strings.Contains(u, "soundcloud.com/") ||
+		strings.HasSuffix(strings.Split(u, "?")[0], ".m3u8") ||
+		strings.HasSuffix(strings.Split(u, "?")[0], ".mpd")
+}
+
+func isGenericVideoTitle(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	return n == "" ||
+		n == "watch" ||
+		n == "video" ||
+		n == "video.mp4" ||
+		n == "media_download" ||
+		n == "media_stream" ||
+		n == "- youtube" ||
+		n == "youtube" ||
+		strings.HasPrefix(n, "-")
 }
