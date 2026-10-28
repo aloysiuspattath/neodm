@@ -498,53 +498,59 @@ async function batchAction(action, ids = null) {
     return;
   }
 
-  const isDemo = downloads.some(d => d.id && (d.id.startsWith('demo-') || d.id.startsWith('showcase-')));
-  if (isDemo) {
-    if (action === 'pause_all') {
-      downloads.forEach(d => { if (d.status === 'Downloading') { d.status = 'Paused'; d.speed = 0; } });
-      showToast('All active downloads paused');
-      renderDownloads();
-      updateTelemetryDock();
-      return;
-    }
-    if (action === 'start_all') {
-      downloads.forEach(d => { if (d.status === 'Paused' || d.status === 'Queued') { d.status = 'Downloading'; d.speed = 12400000; } });
-      showToast('All downloads resumed', 'success');
-      renderDownloads();
-      updateTelemetryDock();
-      return;
-    }
-    if (action === 'pause_selected') {
-      downloads.forEach(d => { if (selectedTaskIds.has(d.id) && d.status === 'Downloading') { d.status = 'Paused'; d.speed = 0; } });
-      showToast(`Paused ${selectedTaskIds.size} selected download(s)`);
-      renderDownloads();
-      updateTelemetryDock();
-      return;
-    }
-    if (action === 'start_selected') {
-      downloads.forEach(d => { if (selectedTaskIds.has(d.id)) { d.status = 'Downloading'; d.speed = 12400000; } });
-      showToast(`Started ${selectedTaskIds.size} selected download(s)`, 'success');
-      renderDownloads();
-      updateTelemetryDock();
-      return;
-    }
-    if (action === 'delete_selected') {
-      downloads = downloads.filter(d => !selectedTaskIds.has(d.id));
-      selectedTaskIds.clear();
-      lastSelectedId = null;
-      showToast('Removed selected downloads');
-      renderDownloads();
-      updateTelemetryDock();
-      updateBentoBatchDock();
-      return;
-    }
-    if (action === 'delete_completed') {
-      downloads = downloads.filter(d => d.status !== 'Completed');
-      showToast('Removed finished downloads from list');
-      renderDownloads();
-      updateTelemetryDock();
-      return;
-    }
+  // Optimistic UI updates for immediate tactile feedback
+  if (action === 'pause_all') {
+    downloads.forEach(d => {
+      if (d.status === 'Downloading' || d.status === 'Connecting' || d.status === 'Queued') {
+        d.status = 'Paused';
+        d.speed = 0;
+      }
+    });
+    renderDownloads();
+    updateTelemetryDock();
+  } else if (action === 'start_all') {
+    downloads.forEach(d => {
+      if (d.status === 'Paused' || d.status === 'Error' || d.status === 'Queued') {
+        d.status = 'Downloading';
+      }
+    });
+    renderDownloads();
+    updateTelemetryDock();
+  } else if (action === 'pause_selected') {
+    downloads.forEach(d => {
+      if (targetIds.includes(d.id) && (d.status === 'Downloading' || d.status === 'Connecting' || d.status === 'Queued')) {
+        d.status = 'Paused';
+        d.speed = 0;
+      }
+    });
+    renderDownloads();
+    updateTelemetryDock();
+  } else if (action === 'start_selected') {
+    downloads.forEach(d => {
+      if (targetIds.includes(d.id)) {
+        d.status = 'Downloading';
+      }
+    });
+    renderDownloads();
+    updateTelemetryDock();
+  } else if (action === 'delete_completed') {
+    downloads = downloads.filter(d => d.status !== 'Completed');
+    renderDownloads();
+    updateTelemetryDock();
+  } else if (action === 'delete_selected') {
+    downloads = downloads.filter(d => !targetIds.includes(d.id));
+    selectedTaskIds.clear();
+    lastSelectedId = null;
+    renderDownloads();
+    updateTelemetryDock();
+    updateBentoBatchDock();
+  } else if (action === 'delete_all' || action === 'delete_all_files') {
+    downloads = [];
+    selectedTaskIds.clear();
+    lastSelectedId = null;
+    renderDownloads();
+    updateTelemetryDock();
+    updateBentoBatchDock();
   }
 
   try {
@@ -554,7 +560,7 @@ async function batchAction(action, ids = null) {
       body: JSON.stringify({ action, ids: targetIds })
     });
     if (res.ok) {
-      if (action === 'delete_completed' || action === 'delete_selected') {
+      if (action.includes('delete')) {
         selectedTaskIds.clear();
         lastSelectedId = null;
       }
@@ -566,10 +572,11 @@ async function batchAction(action, ids = null) {
         pause_selected: `Paused ${count} selected download(s)`,
         delete_completed: 'Removed finished downloads from list',
         delete_selected: `Removed ${count} selected download(s)`,
+        delete_all: 'All downloads removed from list',
         delete_all_files: 'All downloaded files deleted from disk'
       };
       showToast(messages[action] || 'Batch operation complete', action.includes('delete') ? 'info' : 'success');
-      loadInitialData();
+      await loadInitialData();
       updateBentoBatchDock();
     }
   } catch (e) {
@@ -1132,9 +1139,7 @@ function handleWebSocketMessage(msg) {
   } else if (msg.type === 'task_added') {
     const task = data;
     if (task && task.id) {
-      if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
-        downloads = [];
-      }
+      downloads = downloads.filter(d => d.id && !d.id.startsWith('demo-') && !d.id.startsWith('showcase-'));
       const existingIdx = downloads.findIndex(d => d.id === task.id);
       if (existingIdx !== -1) {
         downloads[existingIdx] = { ...downloads[existingIdx], ...task };
@@ -1149,9 +1154,7 @@ function handleWebSocketMessage(msg) {
   } else if (msg.type === 'task_updated') {
     const task = data;
     if (task && task.id) {
-      if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
-        downloads = [];
-      }
+      downloads = downloads.filter(d => d.id && !d.id.startsWith('demo-') && !d.id.startsWith('showcase-'));
       const existingIdx = downloads.findIndex(d => d.id === task.id);
       if (existingIdx !== -1) {
         downloads[existingIdx] = { ...downloads[existingIdx], ...task };
@@ -1218,20 +1221,35 @@ function handleTelemetry(data) {
   // Extract tasks array safely whether payload is direct array or wrapped
   const taskList = Array.isArray(data) ? data : (data.tasks || data.payload || data.downloads || []);
 
-  if (taskList.length > 0) {
-    if (downloads.some(d => d.id && d.id.startsWith('showcase-'))) {
-      downloads = [];
+  // Filter out any fake demo tasks completely
+  const hadDemo = downloads.some(d => d.id && (d.id.startsWith('demo-') || d.id.startsWith('showcase-')));
+  if (hadDemo) {
+    downloads = downloads.filter(d => d.id && !d.id.startsWith('demo-') && !d.id.startsWith('showcase-'));
+  }
+
+  // Reconcile local downloads array against authoritative backend taskList
+  const backendIds = new Set(taskList.map(t => t.id));
+  const prevCount = downloads.length;
+
+  // 1. Prune tasks that no longer exist on backend (e.g. deleted or cleared)
+  downloads = downloads.filter(d => backendIds.has(d.id));
+  let structureChanged = hadDemo || (downloads.length !== prevCount);
+
+  // 2. Update existing or append newly discovered tasks from backend
+  taskList.forEach(updated => {
+    recordTaskSpeed(updated.id, updated.status === 'Downloading' ? (updated.speed || 0) : 0);
+    const idx = downloads.findIndex(d => d.id === updated.id);
+    if (idx !== -1) {
+      downloads[idx] = { ...downloads[idx], ...updated };
+    } else {
+      downloads.push(updated);
+      structureChanged = true;
     }
-    taskList.forEach(updated => {
-      recordTaskSpeed(updated.id, updated.status === 'Downloading' ? (updated.speed || 0) : 0);
-      const idx = downloads.findIndex(d => d.id === updated.id);
-      if (idx !== -1) {
-        downloads[idx] = { ...downloads[idx], ...updated };
-      } else {
-        downloads.push(updated);
-      }
-    });
-    localStorage.setItem('neodm-real-downloads-seen', 'true');
+  });
+
+  if (structureChanged) {
+    renderDownloads();
+    updateCategoryBadges();
   }
 
   // Calculate totals
@@ -1464,11 +1482,8 @@ async function loadInitialData() {
     if (dRes.ok) {
       const dJson = await dRes.json();
       const backendDownloads = dJson.downloads || [];
-      if (backendDownloads.length > 0) {
-        downloads = backendDownloads;
-      } else {
-        downloads = [...INITIAL_DEMO_DOWNLOADS];
-      }
+      // Use real backend downloads; purge any demo tasks in production
+      downloads = backendDownloads.filter(d => d.id && !d.id.startsWith('demo-') && !d.id.startsWith('showcase-'));
       renderDownloads();
       updateCategoryBadges();
       updateTelemetryDock();

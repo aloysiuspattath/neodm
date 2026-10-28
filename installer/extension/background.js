@@ -98,7 +98,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// Automatic Browser Download Interception
+// Automatic Browser Download Interception with rapid duplicate suppression
+const recentInterceptions = new Map(); // url -> timestamp ms
+
 chrome.downloads.onCreated.addListener(async (downloadItem) => {
   const settings = await chrome.storage.local.get(['autoIntercept', 'extensions']);
   if (settings.autoIntercept === false) return;
@@ -106,10 +108,27 @@ chrome.downloads.onCreated.addListener(async (downloadItem) => {
   const url = downloadItem.finalUrl || downloadItem.url;
   if (!url || url.startsWith('blob:') || url.startsWith('data:')) return;
 
+  // Suppress duplicate download events for the same URL triggered within 3 seconds (e.g. redirects or double clicks)
+  const now = Date.now();
+  if (recentInterceptions.has(url) && (now - recentInterceptions.get(url) < 3000)) {
+    try {
+      await chrome.downloads.cancel(downloadItem.id);
+      await chrome.downloads.erase({ id: downloadItem.id });
+    } catch (e) {}
+    return;
+  }
+
   const exts = settings.extensions || DEFAULT_EXTENSIONS;
   const isMatch = matchesExtension(url, exts) || matchesExtension(downloadItem.filename, exts);
 
   if (isMatch) {
+    recentInterceptions.set(url, now);
+    if (recentInterceptions.size > 100) {
+      for (const [k, v] of recentInterceptions) {
+        if (now - v > 10000) recentInterceptions.delete(k);
+      }
+    }
+
     // 1. Cancel browser's standard download
     try {
       await chrome.downloads.cancel(downloadItem.id);

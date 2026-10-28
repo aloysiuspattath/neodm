@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -21,13 +22,15 @@ import (
 
 // Server coordinates the HTTP REST API, WebSocket telemetry, and static frontend.
 type Server struct {
-	engine        *engine.Engine
-	store         *engine.Store
-	grabber       *grabber.SiteGrabber
-	videoAnalyzer *grabber.VideoAnalyzer
-	hub           *Hub
-	frontend      fs.FS
-	addr          string
+	engine          *engine.Engine
+	store           *engine.Store
+	grabber         *grabber.SiteGrabber
+	videoAnalyzer   *grabber.VideoAnalyzer
+	hub             *Hub
+	frontend        fs.FS
+	addr            string
+	recentAddedMu   sync.Mutex
+	recentAddedURLs map[string]int64
 }
 
 // NewServer creates a new API and UI server.
@@ -36,13 +39,14 @@ func NewServer(eng *engine.Engine, store *engine.Store, frontendFS fs.FS, addr s
 	go hub.Run()
 
 	s := &Server{
-		engine:        eng,
-		store:         store,
-		grabber:       grabber.NewSiteGrabber(),
-		videoAnalyzer: grabber.NewVideoAnalyzer(),
-		hub:           hub,
-		frontend:      frontendFS,
-		addr:          addr,
+		engine:          eng,
+		store:           store,
+		grabber:         grabber.NewSiteGrabber(),
+		videoAnalyzer:   grabber.NewVideoAnalyzer(),
+		hub:             hub,
+		frontend:        frontendFS,
+		addr:            addr,
+		recentAddedURLs: make(map[string]int64),
 	}
 
 	eng.OnTaskUpdate(func(t *engine.Task) {
@@ -218,6 +222,34 @@ func (s *Server) handleAddDownload(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Deduplicate rapid requests for identical URL within 2 seconds (e.g. browser redirects or double clicks)
+	now := time.Now().UnixMilli()
+	s.recentAddedMu.Lock()
+	if s.recentAddedURLs == nil {
+		s.recentAddedURLs = make(map[string]int64)
+	}
+	for u, ts := range s.recentAddedURLs {
+		if now-ts > 10000 {
+			delete(s.recentAddedURLs, u)
+		}
+	}
+	if lastTime, exists := s.recentAddedURLs[downloadURL]; exists && (now-lastTime < 2000) {
+		s.recentAddedMu.Unlock()
+		for _, existing := range s.engine.GetAllTasks() {
+			if existing.URL == downloadURL {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"success": true,
+					"task":    existing,
+				})
+				return
+			}
+		}
+		s.recentAddedMu.Lock()
+	}
+	s.recentAddedURLs[downloadURL] = now
+	s.recentAddedMu.Unlock()
+
 	task, err := s.engine.AddTaskWithConflict(downloadURL, downloadFilename, req.SaveDir, cleanHeaders, targetQueue, taskCategory, taskQuality, req.ConflictAction)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -345,7 +377,7 @@ func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "start_all", "resume_all":
 		for _, rec := range allTasks {
-			if rec.Status == "Paused" || rec.Status == "Error" || rec.Status == "Queued" {
+			if rec.Status != "Completed" && rec.Status != "Downloading" && rec.Status != "Connecting" {
 				t := s.engine.GetTask(rec.ID)
 				if t != nil {
 					t.Resume()
@@ -354,7 +386,7 @@ func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
 		}
 	case "pause_all":
 		for _, rec := range allTasks {
-			if rec.Status == "Downloading" || rec.Status == "Connecting" || rec.Status == "Queued" {
+			if rec.Status != "Completed" && rec.Status != "Paused" {
 				t := s.engine.GetTask(rec.ID)
 				if t != nil {
 					t.Pause()
@@ -409,6 +441,14 @@ func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
 				s.hub.BroadcastEvent("task_deleted", map[string]string{"id": id})
 			}
 		}
+	case "delete_all":
+		for _, rec := range allTasks {
+			t := s.engine.GetTask(rec.ID)
+			if t != nil {
+				t.Cancel(false)
+				s.hub.BroadcastEvent("task_deleted", map[string]string{"id": rec.ID})
+			}
+		}
 	case "delete_all_files":
 		for _, rec := range allTasks {
 			t := s.engine.GetTask(rec.ID)
@@ -426,6 +466,9 @@ func (s *Server) handleBatchAction(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// Immediately push synchronized telemetry to connected clients
+	s.hub.broadcastTelemetry()
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true})
